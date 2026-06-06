@@ -16,7 +16,9 @@ const {
 const { request } = require('undici');
 const fs = require('fs');
 const path = require('path');
-const config = require('./config.json');
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const VERIFIED_ROLE_NAME = process.env.VERIFIED_ROLE_NAME;
 
 const DB_FILE = './database.json';
 const WORD_POOL = ["pizza", "right", "verification", "army", "left", "blue", "robot", "down", "cheese", "yes", "up", "green", "tiger"];
@@ -227,7 +229,7 @@ const commands = [
         )
 ].map(command => command.toJSON());
 
-const rest = new REST({ version: '10' }).setToken(config.TOKEN);
+const rest = new REST({ version: '10' }).setToken(TOKEN);
 
 client.on('error', error => console.error('Bot Error:', error));
 client.on('shardError', (error, shardId) => console.error(`Shard ${shardId} disconnected:`, error));
@@ -648,7 +650,7 @@ client.on('interactionCreate', async interaction => {
             let rolesAddedList = [];
             let rolesRemovedList = [];
 
-            const generalVerifiedRole = guild.roles.cache.find(r => r.name === config.VERIFIED_ROLE_NAME);
+            const generalVerifiedRole = guild.roles.cache.find(r => r.name === VERIFIED_ROLE_NAME);
             if (generalVerifiedRole && !member.roles.cache.has(generalVerifiedRole.id)) {
                 await member.roles.add(generalVerifiedRole).catch(() => {});
                 rolesAddedList.push(generalVerifiedRole.toString());
@@ -916,7 +918,7 @@ client.on('messageCreate', async message => {
                         specificRankRoleId = bindConfig.roleId || null;
                     }
 
-                    const baseVerifiedRole = guild.roles.cache.find(r => r.name === config.VERIFIED_ROLE_NAME);
+                    const baseVerifiedRole = guild.roles.cache.find(r => r.name === VERIFIED_ROLE_NAME);
                     if (baseVerifiedRole) await member.roles.add(baseVerifiedRole).catch(() => {});
 
                     if (specificRankRoleId) {
@@ -961,9 +963,9 @@ client.on('messageCreate', async message => {
 async function launchEngine() {
     try {
         console.log('Registering slash commands...');
-        await rest.put(Routes.applicationCommands(config.CLIENT_ID), { body: commands });
+        await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
         console.log('Successfully registered commands globally.');
-        await client.login(config.TOKEN);
+        await client.login(TOKEN);
     } catch (initError) {
         console.error('Bot login failed:', initError);
     }
