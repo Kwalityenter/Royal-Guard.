@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Royal Guard Bot Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 font-sans">
+
+    <nav class="bg-gray-800 border-b border-gray-700 px-6 py-4 flex justify-between items-center">
+        <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-bold text-white shadow-lg">RG</div>
+            <span class="text-xl font-bold tracking-wide">Royal Guard Control Panel</span>
+        </div>
+        <div class="text-sm bg-gray-700 px-3 py-1.5 rounded-md text-gray-300">
+            Status: <span class="text-green-400 font-semibold">● Online</span>
+        </div>
+    </nav>
+
+    <main class="max-w-7xl mx-auto p-6 space-y-8">
+
+        <section class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
+                <h3 class="text-gray-400 text-sm font-medium uppercase tracking-wider">Active Servers</h3>
+                <p id="stat-servers" class="text-3xl font-bold mt-2 text-blue-400">0</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
+                <h3 class="text-gray-400 text-sm font-medium uppercase tracking-wider">Verified Users</h3>
+                <p id="stat-verified" class="text-3xl font-bold mt-2 text-green-400">0</p>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-md">
+                <h3 class="text-gray-400 text-sm font-medium uppercase tracking-wider">Configured Groups</h3>
+                <p id="stat-groups" class="text-3xl font-bold mt-2 text-purple-400">0</p>
+            </div>
+        </section>
+
+        <section class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+            
+            <div class="bg-gray-800 p-4 rounded-xl border border-gray-700 h-fit space-y-3">
+                <h3 class="font-semibold text-gray-300 px-2 pb-2 border-b border-gray-700 text-sm uppercase">Active Guilds</h3>
+                <div id="guild-list" class="space-y-1">
+                    <p class="text-gray-500 text-sm p-2 italic">Loading active servers...</p>
+                </div>
+            </div>
+
+            <div id="dashboard-workspace" class="lg:col-span-3 space-y-8 hidden">
+                
+                <div class="bg-gray-800 p-6 rounded-xl border border-gray-700 shadow-sm space-y-4">
+                    <div class="border-b border-gray-700 pb-3">
+                        <h2 class="text-xl font-bold text-white">Roblox Integration Details</h2>
+                        <p class="text-sm text-gray-400 mt-1">Configured Roblox Group ID and rank tracking presets.</p>
+                    </div>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <span class="text-xs text-gray-400 font-semibold uppercase">Target Group ID</span>
+                            <div id="guild-group-id" class="text-lg font-mono text-blue-300 bg-gray-900 p-3 rounded-lg mt-1 border border-gray-700">None</div>
+                        </div>
+                        <div>
+                            <span class="text-xs text-gray-400 font-semibold uppercase">Logging Output Channel</span>
+                            <div id="guild-log-channel" class="text-lg font-mono text-purple-300 bg-gray-900 p-3 rounded-lg mt-1 border border-gray-700">Not Configured</div>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <span class="text-xs text-gray-400 font-semibold uppercase tracking-wider block mb-2">Active Rank Role Mapping</span>
+                        <div class="overflow-x-auto border border-gray-700 rounded-lg">
+                            <table class="w-full text-left border-collapse">
+                                <thead class="bg-gray-900 text-xs text-gray-400 uppercase font-mono">
+                                    <tr>
+                                        <th class="p-3">Rank ID</th>
+                                        <th class="p-3">Prefix</th>
+                                        <th class="p-3">Discord Role Snowflake ID</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="binds-table-body" class="divide-y divide-gray-700 text-sm">
+                                    </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    
+                    <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-sm space-y-3">
+                        <h3 class="font-bold text-white text-base border-b border-gray-700 pb-2">Custom Authorized Administrators</h3>
+                        <ul id="admin-users-list" class="divide-y divide-gray-700 max-h-60 overflow-y-auto pr-1">
+                            </ul>
+                    </div>
+
+                    <div class="bg-gray-800 p-5 rounded-xl border border-gray-700 shadow-sm space-y-3">
+                        <h3 class="font-bold text-white text-base border-b border-gray-700 pb-2">Authorized Administrative Roles</h3>
+                        <ul id="admin-roles-list" class="divide-y divide-gray-700 max-h-60 overflow-y-auto pr-1">
+                            </ul>
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div id="workspace-placeholder" class="lg:col-span-3 bg-gray-800 border-2 border-dashed border-gray-700 rounded-xl flex flex-col items-center justify-center p-12 text-center text-gray-400">
+                <svg class="w-16 h-16 text-gray-600 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"></path></svg>
+                <h4 class="text-lg font-bold text-gray-300">No Server Selected</h4>
+                <p class="text-sm mt-1 max-w-sm">Please choose a guild from the left sidebar panel to view its automated bindings and configurations.</p>
+            </div>
+
+        </section>
+    </main>
+
+    <script>
+        let currentDatabaseCache = {};
+
+        async function fetchDashboardStats() {
+            try {
+                const response = await axios.get('/api/stats');
+                const data = response.data;
+                currentDatabaseCache = data.database;
+
+                // Render Summary Stats
+                document.getElementById('stat-servers').innerText = data.serverCount;
+                document.getElementById('stat-verified').innerText = data.totalVerified;
+                document.getElementById('stat-groups').innerText = data.configuredGroupsCount;
+
+                // Render Sidebar Guild List
+                const guildListDiv = document.getElementById('guild-list');
+                guildListDiv.innerHTML = '';
+
+                if (Object.keys(currentDatabaseCache).length === 0) {
+                    guildListDiv.innerHTML = `<p class="text-gray-500 text-sm p-2 italic">No data generated yet.</p>`;
+                    return;
+                }
+
+                Object.keys(currentDatabaseCache).forEach(guildId => {
+                    const btn = document.createElement('button');
+                    btn.className = "w-full text-left p-3 rounded-lg text-sm font-medium hover:bg-gray-700 hover:text-white transition-colors duration-150 border border-transparent focus:outline-none focus:bg-gray-700 focus:border-gray-600";
+                    btn.innerText = `Guild ID: ${guildId}`;
+                    btn.onclick = () => selectGuildWorkspace(guildId, btn);
+                    guildListDiv.appendChild(btn);
+                });
+
+            } catch (err) {
+                console.error("Dashboard failed API fetch loading:", err);
+            }
+        }
+
+        function selectGuildWorkspace(guildId, activeElement) {
+            // Manage Active Button States
+            document.querySelectorAll('#guild-list button').forEach(el => el.classList.remove('bg-gray-700', 'text-white', 'border-gray-600'));
+            activeElement.classList.add('bg-gray-700', 'text-white', 'border-gray-600');
+
+            const guildConfig = currentDatabaseCache[guildId];
+            
+            document.getElementById('workspace-placeholder').classList.add('hidden');
+            document.getElementById('dashboard-workspace').classList.remove('hidden');
+
+            // Render Core Attributes
+            document.getElementById('guild-group-id').innerText = guildConfig.groupId || 'None Specified';
+            document.getElementById('guild-log-channel').innerText = guildConfig.logChannelId || 'Not Configured';
+
+            // Populate Rank Mapping Table
+            const tbody = document.getElementById('binds-table-body');
+            tbody.innerHTML = '';
+            const activeBinds = Object.entries(guildConfig.binds || {});
+            if (activeBinds.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="p-4 text-center text-gray-500 italic">No ranks mapped. Use /rankbinds in Discord.</td></tr>`;
+            } else {
+                activeBinds.forEach(([rankId, bindData]) => {
+                    const row = document.createElement('tr');
+                    row.className = "hover:bg-gray-700/50 transition-colors";
+                    row.innerHTML = `
+                        <td class="p-3 font-mono font-bold text-yellow-400">${rankId}</td>
+                        <td class="p-3"><span class="bg-gray-900 px-2 py-1 rounded text-xs font-mono text-blue-300 border border-gray-700">${bindData.prefix}</span></td>
+                        <td class="p-3 font-mono text-gray-400 text-xs">${bindData.roleId}</td>
+                    `;
+                    tbody.appendChild(row);
+                });
+            }
+
+            // Populate Users Admin Hierarchy UI List
+            const usersList = document.getElementById('admin-users-list');
+            usersList.innerHTML = '';
+            const adminUsers = Object.entries(guildConfig.adminUsers || {});
+            if (adminUsers.length === 0) {
+                usersList.innerHTML = `<li class="p-3 text-sm text-gray-500 text-center italic">No individual admin overrides.</li>`;
+            } else {
+                adminUsers.forEach(([userId, clearanceLevel]) => {
+                    usersList.innerHTML += `
+                        <li class="py-2.5 flex justify-between items-center text-sm">
+                            <span class="font-mono text-gray-300">UID: ${userId}</span>
+                            <span class="bg-blue-900/40 text-blue-300 border border-blue-800 text-xs font-semibold px-2 py-0.5 rounded-full">Level ${clearanceLevel}</span>
+                        </li>`;
+                });
+            }
+
+            // Populate Roles Admin Hierarchy UI List
+            const rolesList = document.getElementById('admin-roles-list');
+            rolesList.innerHTML = '';
+            const adminRoles = Object.entries(guildConfig.adminRoles || {});
+            if (adminRoles.length === 0) {
+                rolesList.innerHTML = `<li class="p-3 text-sm text-gray-500 text-center italic">No administrative roles authorized.</li>`;
+            } else {
+                adminRoles.forEach(([roleId, clearanceLevel]) => {
+                    rolesList.innerHTML += `
+                        <li class="py-2.5 flex justify-between items-center text-sm">
+                            <span class="font-mono text-gray-300">Role ID: ${roleId}</span>
+                            <span class="bg-purple-900/40 text-purple-300 border border-purple-800 text-xs font-semibold px-2 py-0.5 rounded-full">Level ${clearanceLevel}</span>
+                        </li>`;
+                });
+            }
+        }
+
+        // Initial Data Fetch Trigger
+        fetchDashboardStats();
+    </script>
+</body>
+</html>
