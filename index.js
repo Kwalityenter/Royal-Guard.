@@ -9,20 +9,20 @@ const {
     SlashCommandBuilder,
     ActionRowBuilder,
     ButtonBuilder,
-    ButtonStyle,
-    StringSelectMenuBuilder,
+    ButtonStyle, 
     PermissionsBitField
 } = require('discord.js');
 const { request } = require('undici');
 const fs = require('fs');
 const path = require('path');
+
 const TOKEN = process.env.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID;
 const VERIFIED_ROLE_NAME = process.env.VERIFIED_ROLE_NAME;
 
 const DB_FILE = './database.json';
 const WORD_POOL = ["pizza", "right", "verification", "army", "left", "blue", "robot", "down", "cheese", "yes", "up", "green", "tiger"];
-const cooldowns = new Map(); // Tracks ticket creation cooldowns (18s)
+const cooldowns = new Map();
 
 // ----------------- DATABASE UTILITIES -----------------
 let db = {};
@@ -52,7 +52,7 @@ function saveDB() {
 }
 
 function getAdminLevel(guild, member) {
-    if (guild.ownerId === member.id) return 8; // Level 8: Server Owner
+    if (guild.ownerId === member.id) return 8; 
     
     const serverConfig = db[guild.id];
     if (!serverConfig) return 0;
@@ -103,7 +103,6 @@ function formatDurationString(str) {
     return `${value} ${unitNames[unit]}${parseInt(value, 10) !== 1 ? 's' : ''}`;
 }
 
-// Fixed to dynamically present OAuth2 network metadata structures seen in verification logs
 async function sendVerificationLog(guild, member, robloxUser, method, oauthData = null) {
     const serverConfig = db[guild.id];
     if (!serverConfig || !serverConfig.logChannelId) return;
@@ -130,7 +129,7 @@ async function sendVerificationLog(guild, member, robloxUser, method, oauthData 
     const logEmbed = new EmbedBuilder()
         .setTitle("Verification Logs")
         .setDescription(logDescription)
-        .setColor(0x2B2D31)
+        .setColor(0x3498DB)
         .setTimestamp();
 
     await logChannel.send({ embeds: [logEmbed] }).catch(() => {});
@@ -149,84 +148,127 @@ const client = new Client({
 const commands = [
     new SlashCommandBuilder()
         .setName('rankbinds')
-        .setDescription('Bind a Roblox Group Rank ID to a Discord Nickname Prefix and Role')
-        .addIntegerOption(option => option.setName('groupid').setDescription('The Roblox Group ID').setRequired(true))
-        .addIntegerOption(option => option.setName('rankid').setDescription('The Roblox Rank ID (1-255)').setRequired(true))
-        .addStringOption(option => option.setName('prefix').setDescription('The prefix to apply, e.g., [OR-1]').setRequired(true))
-        .addRoleOption(option => option.setName('role').setDescription('The Discord role to give for this rank').setRequired(true)),
+        .setDescription('Manage Roblox rank bindings for this server')
+        .addSubcommand(sub =>
+            sub.setName('add')
+               .setDescription('Bind a Roblox Rank to a Discord Prefix and Role')
+               .addIntegerOption(option => option.setName('groupid').setDescription('Roblox Group ID').setRequired(true))
+               .addIntegerOption(option => option.setName('rankid').setDescription('Roblox Rank ID (1-255)').setRequired(true))
+               .addStringOption(option => option.setName('prefix').setDescription('Prefix to apply (e.g. [OR-1])').setRequired(true))
+               .addRoleOption(option => option.setName('role').setDescription('Discord role for this rank').setRequired(true))
+        )
+        .addSubcommand(sub =>
+            sub.setName('delete')
+               .setDescription('Remove an existing Roblox rank binding')
+               .addIntegerOption(option => option.setName('rankid').setDescription('The Roblox Rank ID you want to unbind').setRequired(true))
+        ),
             
     new SlashCommandBuilder()
         .setName('update')
-        .setDescription('Update your server nickname and roles based on your Roblox Group rank'),
+        .setDescription('Sync your nickname and roles with your Roblox rank'),
 
     new SlashCommandBuilder()
         .setName('admin')
-        .setDescription('Manage custom bot administrators and level clearance keys')
+        .setDescription('Manage bot admins and clearance levels')
         .addSubcommand(sub => 
             sub.setName('add')
-               .setDescription('Add a role or individual user as a bot administrator')
-               .addIntegerOption(opt => opt.setName('level').setDescription('Clearance authorization level (1-7)').setRequired(true).setMinValue(1).setMaxValue(7))
-               .addUserOption(opt => opt.setName('user').setDescription('Target user to authorize').setRequired(false))
-               .addRoleOption(opt => opt.setName('role').setDescription('Target role to authorize').setRequired(false)))
+               .setDescription('Add a user or role as a bot admin')
+               .addIntegerOption(opt => opt.setName('level').setDescription('Clearance level (1-7)').setRequired(true).setMinValue(1).setMaxValue(7))
+               .addUserOption(opt => opt.setName('user').setDescription('User to add').setRequired(false))
+               .addRoleOption(opt => opt.setName('role').setDescription('Role to add').setRequired(false)))
         .addSubcommand(sub => 
             sub.setName('delete')
-               .setDescription('Remove a role or user from bot administration privileges')
-               .addUserOption(opt => opt.setName('user').setDescription('Target user to remove').setRequired(false))
-               .addRoleOption(opt => opt.setName('role').setDescription('Target role to remove').setRequired(false))),
+               .setDescription('Remove admin permissions from a user or role')
+               .addUserOption(opt => opt.setName('user').setDescription('User to remove').setRequired(false))
+               .addRoleOption(opt => opt.setName('role').setDescription('Role to remove').setRequired(false))),
 
     new SlashCommandBuilder()
         .setName('verification-logs')
-        .setDescription('Set up the logging channel for verification occurrences')
+        .setDescription('Set up the log channel for verifications')
         .addChannelOption(opt => 
             opt.setName('channel')
-               .setDescription('Select the target text channel for tracking logs')
+               .setDescription('Select the text channel for logs')
                .setRequired(true)
                .addChannelTypes(ChannelType.GuildText)),
 
     new SlashCommandBuilder()
         .setName('warn')
-        .setDescription('Issue an official warning record log to a server user')
-        .addUserOption(opt => opt.setName('user').setDescription('Target member to warn').setRequired(true))
-        .addStringOption(opt => opt.setName('reason').setDescription('Contextual reasoning explanation').setRequired(true)),
+        .setDescription('Log a formal warning for a user')
+        .addUserOption(opt => opt.setName('user').setDescription('User to warn').setRequired(true))
+        .addStringOption(opt => opt.setName('reason').setDescription('Reason for the warning').setRequired(true)),
 
     new SlashCommandBuilder()
         .setName('mute')
-        .setDescription('Timeout/Mute a specific member inside the guild')
-        .addUserOption(opt => opt.setName('user').setDescription('Target member to mute').setRequired(true))
-        .addStringOption(opt => opt.setName('duration').setDescription('Length parameters, e.g., 30m, 3h, 1d').setRequired(true))
-        .addStringOption(opt => opt.setName('reason').setDescription('Contextual reasoning explanation').setRequired(true)),
+        .setDescription('Timeout/Mute a member in the server')
+        .addUserOption(opt => opt.setName('user').setDescription('User to mute').setRequired(true))
+        .addStringOption(opt => opt.setName('duration').setDescription('How long (e.g. 30m, 3h, 1d)').setRequired(true))
+        .addStringOption(opt => opt.setName('reason').setDescription('Reason for the mute').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('unmute')
+        .setDescription('Remove a timeout/mute from a member')
+        .addUserOption(opt => opt.setName('user').setDescription('User to unmute').setRequired(true))
+        .addStringOption(opt => opt.setName('reason').setDescription('Reason for the unmute').setRequired(false)),
 
     new SlashCommandBuilder()
         .setName('ban')
-        .setDescription('Permanently sever access permissions and ban a member from the server')
-        .addUserOption(opt => opt.setName('user').setDescription('Target member to ban').setRequired(true))
-        .addStringOption(opt => opt.setName('reason').setDescription('Contextual reasoning explanation').setRequired(true)),
+        .setDescription('Permanently ban a member from the server')
+        .addUserOption(opt => opt.setName('user').setDescription('User to ban').setRequired(true))
+        .addStringOption(opt => opt.setName('reason').setDescription('Reason for the ban').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('unban')
+        .setDescription('Unban a user from the server using their user ID')
+        .addStringOption(opt => opt.setName('userid').setDescription('The Discord User ID to unban').setRequired(true))
+        .addStringOption(opt => opt.setName('reason').setDescription('Reason for the unban').setRequired(false)),
 
     new SlashCommandBuilder()
         .setName('ticket')
-        .setDescription('Manage and configure the Royal Guard ticket environment.')
+        .setDescription('Manage the ticket system environment')
         .addSubcommand(sub =>
             sub.setName('configure')
-               .setDescription('Configure ticket parameters for this guild.')
-               .addChannelOption(opt => opt.setName('category').setDescription('The category layout where tickets are created.').addChannelTypes(ChannelType.GuildCategory).setRequired(true))
+               .setDescription('Set the category where new tickets are created')
+               .addChannelOption(opt => opt.setName('category').setDescription('The target category channel').addChannelTypes(ChannelType.GuildCategory).setRequired(true))
         )
         .addSubcommand(sub =>
             sub.setName('add')
-               .setDescription('Adds a user to the current ticket channel.')
-               .addUserOption(opt => opt.setName('target').setDescription('The user to add to this ticket channel.').setRequired(true))
+               .setDescription('Add a user to the current ticket channel')
+               .addUserOption(opt => opt.setName('target').setDescription('The user to add').setRequired(true))
         )
         .addSubcommand(sub =>
             sub.setName('panel')
-               .setDescription('Send a modern interactive ticket portal dashboard panel.')
+               .setDescription('Send an interactive ticket portal panel')
                .addStringOption(opt => 
                     opt.setName('type')
-                       .setDescription('Select the layout style for the system panel.')
+                       .setDescription('Select the ticket panel style')
                        .setRequired(true)
                        .addChoices(
                            { name: 'Report Tickets Panel', value: 'report' },
                            { name: 'Other Tickets Panel', value: 'other' }
                        ))
-        )
+        ),
+
+    new SlashCommandBuilder()
+        .setName('roblox-cookie')
+        .setDescription('Configure group verification cookie settings (Requires Level 5 Admin)')
+        .addStringOption(opt => opt.setName('cookie').setDescription('Your .ROBLOX_SECURITY cookie token').setRequired(true))
+        .addStringOption(opt => opt.setName('groupid').setDescription('Your Roblox Group ID').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('promote')
+        .setDescription('Promote a user inside the bound Roblox group')
+        .addStringOption(opt => opt.setName('username').setDescription('Their Roblox account username').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('demote')
+        .setDescription('Demote a user inside the bound Roblox group')
+        .addStringOption(opt => opt.setName('username').setDescription('Their Roblox account username').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('set-rank')
+        .setDescription('Directly set a user to a specific Roblox rank ID')
+        .addStringOption(opt => opt.setName('username').setDescription('Their Roblox account username').setRequired(true))
+        .addIntegerOption(opt => opt.setName('rankid').setDescription('The target Rank ID integer (1-255)').setRequired(true))
 ].map(command => command.toJSON());
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);
@@ -297,6 +339,24 @@ async function getRobloxUserRank(userId, groupId) {
     return 0;
 }
 
+async function fetchRobloxTokenSignature(cookie) {
+    try {
+        const res = await request('https://auth.roblox.com/v2/logout', {
+            method: 'POST',
+            headers: { 'Cookie': `.ROBLOX_SECURITY=${cookie}` }
+        });
+        return res.headers['x-csrf-token'] || null;
+    } catch { return null; }
+}
+
+async function fetchRobloxRoleSets(groupId) {
+    try {
+        const res = await request(`https://groups.roblox.com/v1/groups/${groupId}/roles`);
+        const data = await res.body.json();
+        return data.roles || [];
+    } catch { return []; }
+}
+
 // ----------------- INTERACTION HANDLING -----------------
 client.on('interactionCreate', async interaction => {
     const guild = interaction.guild;
@@ -304,9 +364,14 @@ client.on('interactionCreate', async interaction => {
 
     if (!guild) return;
 
-    if (!db[guild.id]) {
-        db[guild.id] = { groupId: null, binds: {}, verifiedUsers: {}, adminUsers: {}, adminRoles: {}, ticketCategory: null, ticketCount: 0 };
+    if (!db.globalVerifiedUsers) {
+        db.globalVerifiedUsers = {};
     }
+
+    if (!db[guild.id]) {
+        db[guild.id] = { groupId: null, binds: {}, adminUsers: {}, adminRoles: {}, ticketCategory: null, ticketCount: 0, robloxCookie: null };
+    }
+    if (!db[guild.id].binds) db[guild.id].binds = {};
     if (!db[guild.id].adminUsers) db[guild.id].adminUsers = {};
     if (!db[guild.id].adminRoles) db[guild.id].adminRoles = {};
     
@@ -321,17 +386,20 @@ client.on('interactionCreate', async interaction => {
 
             if (subcommand === 'configure') {
                 if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild) && callerAdminLevel === 0) {
-                    return interaction.reply({ content: '❌ You lack system permissions to alter ticket destination categories.', ephemeral: true });
+                    const embed = new EmbedBuilder().setDescription("You don't have permission to change the ticket category.").setColor(0xE67E22);
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
                 }
                 const category = interaction.options.getChannel('category');
                 serverConfig.ticketCategory = category.id;
                 saveDB();
-                return interaction.reply({ content: `✅ New ticket creation parent category successfully bound to: **${category.name}**`, ephemeral: true });
+                const embed = new EmbedBuilder().setDescription(`Ticket category successfully set to: **${category.name}**`).setColor(0x3498DB);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
             if (subcommand === 'add') {
                 if (!interaction.channel.name.startsWith('ticket-')) {
-                    return interaction.reply({ content: '❌ This command can only be executed inside active ticket channels.', ephemeral: true });
+                    const embed = new EmbedBuilder().setDescription("This command can only be used inside an active ticket channel.").setColor(0xE67E22);
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
                 }
                 const target = interaction.options.getUser('target');
                 await interaction.channel.permissionOverwrites.edit(target.id, {
@@ -339,102 +407,87 @@ client.on('interactionCreate', async interaction => {
                     SendMessages: true,
                     ReadMessageHistory: true
                 });
-                return interaction.reply({ content: `✅ Added **${target.username}** to this ticket instance.` });
+                const embed = new EmbedBuilder().setDescription(`Added **${target.username}** to this ticket channel.`).setColor(0x3498DB);
+                return interaction.reply({ embeds: [embed] });
             }
 
             if (subcommand === 'panel') {
                 if (!interaction.member.permissions.has(PermissionFlagsBits.ManageGuild) && callerAdminLevel === 0) {
-                    return interaction.reply({ content: '❌ You lack permissions to deploy system panels.', ephemeral: true });
+                    const embed = new EmbedBuilder().setDescription("You don't have permission to place ticket panels.").setColor(0xE67E22);
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
                 }
                 const type = interaction.options.getString('type');
 
                 if (type === 'report') {
                     const embed = new EmbedBuilder()
                         .setTitle('REPORT TICKETS')
-                        .setDescription('Press the 🚨 **Create Ticket** button for tickets to report an incident or other users.')
-                        .setColor(0xBE1E2D);
+                        .setDescription('Click the 🚨 **Create Ticket** button below to report an incident or user.')
+                        .setColor(0x3498DB);
 
                     const row = new ActionRowBuilder().addComponents(
                         new ButtonBuilder().setCustomId('ticket_btn_report').setLabel('Create Ticket').setStyle(ButtonStyle.Danger)
                     );
-                    
                     await interaction.channel.send({ embeds: [embed], components: [row] });
                 } else if (type === 'other') {
                     const embed = new EmbedBuilder()
                         .setTitle('OTHER TICKETS')
-                        .setDescription('Press the 🚨 **Create Ticket** button for tickets regarding other matters.')
-                        .setColor(0xBE1E2D);
+                        .setDescription('Click the 🚨 **Create Ticket** button below to open a ticket for other matters.')
+                        .setColor(0x3498DB);
 
                     const row = new ActionRowBuilder().addComponents(
                         new ButtonBuilder().setCustomId('ticket_btn_other').setLabel('Create Ticket').setStyle(ButtonStyle.Danger)
                     );
-
                     await interaction.channel.send({ embeds: [embed], components: [row] });
                 }
 
-                return interaction.reply({ content: '✅ Panel interface framework injected successfully.', ephemeral: true });
+                const successEmbed = new EmbedBuilder().setDescription("Ticket panel posted successfully.").setColor(0x3498DB);
+                return interaction.reply({ embeds: [successEmbed], ephemeral: true });
             }
         }
 
         // --- /VERIFICATION-LOGS CONFIGURATION COMMAND ---
         if (interaction.commandName === 'verification-logs') {
             if (callerAdminLevel === 0) {
-                const noPerms = new EmbedBuilder().setDescription("You must be an authorized administrator to set logging preferences.").setColor(0xE67E22);
-                return interaction.reply({ embeds: [noPerms], ephemeral: true });
+                const embed = new EmbedBuilder().setDescription("You need to be a bot administrator to change log settings.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
             const logChannel = interaction.options.getChannel('channel');
             serverConfig.logChannelId = logChannel.id;
             saveDB();
 
-            const successSetup = new EmbedBuilder()
-                .setDescription(`Successfully designated ${logChannel} to output registration and verification server logs.`)
-                .setColor(0x3498DB);
-            return interaction.reply({ embeds: [successSetup] });
+            const embed = new EmbedBuilder().setDescription(`Logs will now be sent to ${logChannel}.`).setColor(0x3498DB);
+            return interaction.reply({ embeds: [embed] });
         }
 
-        // --- MODERATION ACTIONS ENGINE (/WARN, /MUTE, /BAN) ---
-        if (['warn', 'mute', 'ban'].includes(interaction.commandName)) {
+        // --- MODERATION ACTIONS ENGINE (/WARN, /MUTE, /UNMUTE, /BAN, /UNBAN) ---
+        if (['warn', 'mute', 'unmute', 'ban'].includes(interaction.commandName)) {
             if (callerAdminLevel === 0) {
-                const noPerms = new EmbedBuilder().setDescription("You must be an authorized administrator to manage punishments.").setColor(0xE67E22);
-                return interaction.reply({ embeds: [noPerms], ephemeral: true });
+                const embed = new EmbedBuilder().setDescription("You must be an authorized bot admin to use moderation actions.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
             const targetUser = interaction.options.getUser('user');
-            const reason = interaction.options.getString('reason');
+            const reason = interaction.options.getString('reason') || "No reason specified.";
             const targetMember = await guild.members.fetch(targetUser.id).catch(() => null);
 
             if (!targetMember) {
-                const noUser = new EmbedBuilder().setDescription("This user is not current or present within this guild.").setColor(0xE67E22);
-                return interaction.reply({ embeds: [noUser], ephemeral: true });
+                const embed = new EmbedBuilder().setDescription("That user isn't in this server.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
             const targetAdminLevel = getAdminLevel(guild, targetMember);
             if (targetAdminLevel >= callerAdminLevel) {
-                const hierarchyErr = new EmbedBuilder()
-                    .setDescription(`Permission Denied. You cannot discipline ${targetUser} because their hierarchy level (${targetAdminLevel}) is equal to or higher than yours (${callerAdminLevel}).`)
-                    .setColor(0xE67E22);
-                return interaction.reply({ embeds: [hierarchyErr], ephemeral: true });
+                const embed = new EmbedBuilder().setDescription(`Action denied. You cannot moderate ${targetUser} because their admin level (${targetAdminLevel}) is equal to or higher than yours (${callerAdminLevel}).`).setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
             if (interaction.commandName === 'warn') {
-                const dmEmbed = new EmbedBuilder()
-                    .setTitle("Warning Notice")
-                    .setDescription(`You have received an official warning inside **${guild.name}**.`)
-                    .addFields(
-                        { name: "Reason", value: reason },
-                        { name: "Action Taken By", value: `${interaction.user.tag}` }
-                    )
-                    .setColor(0xF1C40F);
+                const dmEmbed = new EmbedBuilder().setTitle("Warning Notice").setDescription(`You have been warned in **${guild.name}**.\n**Reason:** ${reason}`).setColor(0xE67E22);
                 await targetUser.send({ embeds: [dmEmbed] }).catch(() => {});
 
-                const channelNotice = new EmbedBuilder()
-                    .setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
-                    .setTitle("Warning Notice")
-                    .setDescription(`${targetUser} | \n${targetUser.id} || Was given an official warning for: \`${reason}\``)
-                    .setColor(0xF1C40F);
-
-                return interaction.reply({ embeds: [channelNotice] });
+                const embed = new EmbedBuilder().setDescription(`**${targetUser.tag}** has been warned.\n**Reason:** ${reason}`).setColor(0x3498DB);
+                return interaction.reply({ embeds: [embed] });
             }
 
             if (interaction.commandName === 'mute') {
@@ -442,66 +495,81 @@ client.on('interactionCreate', async interaction => {
                 const durationMs = parseDuration(rawDuration);
 
                 if (!durationMs) {
-                    const invalidTime = new EmbedBuilder().setDescription("Invalid duration format provided. Please use syntax like `30m`, `3h`, or `1d`.").setColor(0xE67E22);
-                    return interaction.reply({ embeds: [invalidTime], ephemeral: true });
+                    const embed = new EmbedBuilder().setDescription("Invalid time format. Please use something like `30m`, `3h`, or `1d`.").setColor(0xE67E22);
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
                 }
 
                 const cleanDurationStr = formatDurationString(rawDuration);
-
-                await targetMember.timeout(durationMs, reason).catch(async err => {
+                await targetMember.timeout(durationMs, reason).catch(err => {
                     console.error(err);
-                    return interaction.reply({ content: "Failed to apply timeout due to role permissions.", ephemeral: true });
                 });
 
-                const dmEmbed = new EmbedBuilder()
-                    .setTitle("Mute Notice")
-                    .setDescription(`You have been muted inside **${guild.name}**.`)
-                    .addFields(
-                        { name: "Duration", value: cleanDurationStr },
-                        { name: "Reason", value: reason }
-                    )
-                    .setColor(0x2B2D31);
+                const dmEmbed = new EmbedBuilder().setTitle("Mute Notice").setDescription(`You have been muted in **${guild.name}** for ${cleanDurationStr}.\n**Reason:** ${reason}`).setColor(0xE67E22);
                 await targetUser.send({ embeds: [dmEmbed] }).catch(() => {});
 
-                // Fixed: Aligned layout strings to exactly match production logs (image_b3d849.png)
-                const channelNotice = new EmbedBuilder()
-                    .setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
-                    .setTitle("Mute Notice")
-                    .setDescription(`${targetUser} |\n${targetUser.id} || Replying or pinging BoD in (${interaction.channel}) and was muted for (${cleanDurationStr})`)
-                    .setColor(0x2B2D31);
+                const embed = new EmbedBuilder().setDescription(`**${targetUser.tag}** has been muted for ${cleanDurationStr}.\n**Reason:** ${reason}`).setColor(0x3498DB);
+                return interaction.reply({ embeds: [embed] });
+            }
 
-                return interaction.reply({ embeds: [channelNotice] });
+            if (interaction.commandName === 'unmute') {
+                if (!targetMember.communicationDisabledUntilTimestamp) {
+                    const embed = new EmbedBuilder().setDescription(`**${targetUser.tag}** is not currently muted.`).setColor(0xE67E22);
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
+                }
+
+                await targetMember.timeout(null, reason).catch(err => {
+                    console.error(err);
+                });
+
+                const dmEmbed = new EmbedBuilder().setTitle("Unmute Notice").setDescription(`Your mute has been removed in **${guild.name}**.\n**Reason:** ${reason}`).setColor(0x3498DB);
+                await targetUser.send({ embeds: [dmEmbed] }).catch(() => {});
+
+                const embed = new EmbedBuilder().setDescription(`Successfully unmuted **${targetUser.tag}**.\n**Reason:** ${reason}`).setColor(0x3498DB);
+                return interaction.reply({ embeds: [embed] });
             }
 
             if (interaction.commandName === 'ban') {
-                const dmEmbed = new EmbedBuilder()
-                    .setTitle("Ban Notice")
-                    .setDescription(`You have been permanently banned from **${guild.name}**.`)
-                    .addFields({ name: "Reason", value: reason })
-                    .setColor(0xE74C3C);
-                
+                const dmEmbed = new EmbedBuilder().setTitle("Ban Notice").setDescription(`You have been permanently banned from **${guild.name}**.\n**Reason:** ${reason}`).setColor(0xE67E22);
                 await targetUser.send({ embeds: [dmEmbed] }).catch(() => {});
                 
-                await targetMember.ban({ reason: reason }).catch(async err => {
+                await targetMember.ban({ reason: reason }).catch(err => {
                     console.error(err);
-                    return interaction.reply({ content: "Failed to ban target member. Check role hierarchy constraints.", ephemeral: true });
                 });
 
-                const channelNotice = new EmbedBuilder()
-                    .setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
-                    .setTitle("Ban Notice")
-                    .setDescription(`${targetUser} | \n${targetUser.id} || Has been permanently banned from the server.\n\n**Reason:** \`${reason}\``)
-                    .setColor(0xE74C3C);
-
-                return interaction.reply({ embeds: [channelNotice] });
+                const embed = new EmbedBuilder().setDescription(`**${targetUser.tag}** has been permanently banned.\n**Reason:** ${reason}`).setColor(0x3498DB);
+                return interaction.reply({ embeds: [embed] });
             }
+        }
+
+        // --- /UNBAN COMMAND HANDLING ---
+        if (interaction.commandName === 'unban') {
+            if (callerAdminLevel === 0) {
+                const embed = new EmbedBuilder().setDescription("You must be an authorized bot admin to use moderation actions.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+
+            const targetUserId = interaction.options.getString('userid');
+            const reason = interaction.options.getString('reason') || "No reason specified.";
+
+            const banList = await guild.bans.fetch().catch(() => null);
+            if (!banList || !banList.has(targetUserId)) {
+                const embed = new EmbedBuilder().setDescription("That user ID could not be found on the server ban list.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+
+            await guild.members.unban(targetUserId, reason).catch(err => {
+                console.error(err);
+            });
+
+            const embed = new EmbedBuilder().setDescription(`Successfully unbanned user ID \`${targetUserId}\` from the server.\n**Reason:** ${reason}`).setColor(0x3498DB);
+            return interaction.reply({ embeds: [embed] });
         }
 
         // --- /ADMIN COMMAND ENGINE ---
         if (interaction.commandName === 'admin') {
             if (callerAdminLevel === 0) {
-                const noPerms = new EmbedBuilder().setDescription("You must be a verified bot administrator to use management tools.").setColor(0xE67E22);
-                return interaction.reply({ embeds: [noPerms], ephemeral: true });
+                const embed = new EmbedBuilder().setDescription("You must be a bot administrator to use admin settings.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
             const subcommand = interaction.options.getSubcommand();
@@ -512,28 +580,28 @@ client.on('interactionCreate', async interaction => {
                 const targetRole = interaction.options.getRole('role');
 
                 if (!targetUser && !targetRole) {
-                    const err = new EmbedBuilder().setDescription("You must select either a `user` or a `role` parameter to grant clearance.").setColor(0xE67E22);
-                    return interaction.reply({ embeds: [err], ephemeral: true });
+                    const embed = new EmbedBuilder().setDescription("Please specify either a user or a role to grant clearance.").setColor(0xE67E22);
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
                 }
 
                 if (targetLevel >= callerAdminLevel) {
-                    const fail = new EmbedBuilder().setDescription(`Permission Denied. You cannot assign Level ${targetLevel} because your own clearance level is ${callerAdminLevel}.`).setColor(0xE67E22);
-                    return interaction.reply({ embeds: [fail], ephemeral: true });
+                    const embed = new EmbedBuilder().setDescription(`Action denied. You cannot grant Level ${targetLevel} because your own admin level is ${callerAdminLevel}.`).setColor(0xE67E22);
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
                 }
 
-                let responseMessage = "";
+                let msg = "";
                 if (targetUser) {
                     serverConfig.adminUsers[targetUser.id] = targetLevel;
-                    responseMessage += `Successfully promoted user ${targetUser} to **Level ${targetLevel} Admin**.\n`;
+                    msg += `Added ${targetUser} as a **Level ${targetLevel} Admin**.\n`;
                 }
                 if (targetRole) {
                     serverConfig.adminRoles[targetRole.id] = targetLevel;
-                    responseMessage += `Successfully promoted role ${targetRole} to **Level ${targetLevel} Admin Privilege**.`;
+                    msg += `Added role ${targetRole} to **Level ${targetLevel} Admin Privileges**.`;
                 }
 
                 saveDB();
-                const ok = new EmbedBuilder().setTitle("Admin Clearance Assigned").setDescription(responseMessage).setColor(0x3498DB);
-                return interaction.reply({ embeds: [ok] });
+                const embed = new EmbedBuilder().setDescription(msg).setColor(0x3498DB);
+                return interaction.reply({ embeds: [embed] });
             }
 
             if (subcommand === 'delete') {
@@ -541,95 +609,105 @@ client.on('interactionCreate', async interaction => {
                 const targetRole = interaction.options.getRole('role');
 
                 if (!targetUser && !targetRole) {
-                    const err = new EmbedBuilder().setDescription("You must specify either a `user` or a `role` object to remove authorization.").setColor(0xE67E22);
-                    return interaction.reply({ embeds: [err], ephemeral: true });
+                    const embed = new EmbedBuilder().setDescription("Please choose either a user or a role to remove admin from.").setColor(0xE67E22);
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
                 }
 
-                let responseMessage = "";
+                let msg = "";
 
                 if (targetUser) {
-                    const targetCurrentLevel = serverConfig.adminUsers[targetUser.id] || 0;
-                    if (targetCurrentLevel >= callerAdminLevel) {
-                        const fail = new EmbedBuilder().setDescription(`Permission Denied. You cannot remove ${targetUser} because their rank level (${targetCurrentLevel}) matches or exceeds yours (${callerAdminLevel}).`).setColor(0xE67E22);
-                        return interaction.reply({ embeds: [fail], ephemeral: true });
+                    const currentLevel = serverConfig.adminUsers[targetUser.id] || 0;
+                    if (currentLevel >= callerAdminLevel) {
+                        const embed = new EmbedBuilder().setDescription(`Action denied. You cannot remove ${targetUser} because their level matches or exceeds yours.`).setColor(0xE67E22);
+                        return interaction.reply({ embeds: [embed], ephemeral: true });
                     }
                     delete serverConfig.adminUsers[targetUser.id];
-                    responseMessage += `Removed administrator permissions from user ${targetUser}.\n`;
+                    msg += `Removed admin options from ${targetUser}.\n`;
                 }
 
                 if (targetRole) {
-                    const targetRoleLevel = serverConfig.adminRoles[targetRole.id] || 0;
-                    if (targetRoleLevel >= callerAdminLevel) {
-                        const fail = new EmbedBuilder().setDescription(`Permission Denied. You cannot strip ${targetRole} because its assigned hierarchy (${targetRoleLevel}) matches or exceeds yours (${callerAdminLevel}).`).setColor(0xE67E22);
-                        return interaction.reply({ embeds: [fail], ephemeral: true });
+                    const roleLevel = serverConfig.adminRoles[targetRole.id] || 0;
+                    if (roleLevel >= callerAdminLevel) {
+                        const embed = new EmbedBuilder().setDescription(`Action denied. You cannot remove ${targetRole} because its assigned clearance level matches or exceeds yours.`).setColor(0xE67E22);
+                        return interaction.reply({ embeds: [embed], ephemeral: true });
                     }
                     delete serverConfig.adminRoles[targetRole.id];
-                    responseMessage += `Removed administrator status configuration from role ${targetRole}.`;
+                    msg += `Removed admin options from role ${targetRole}.`;
                 }
 
                 saveDB();
-                const ok = new EmbedBuilder().setTitle("Admin Clearance Revoked").setDescription(responseMessage).setColor(0x3498DB);
-                return interaction.reply({ embeds: [ok] });
+                const embed = new EmbedBuilder().setDescription(msg).setColor(0x3498DB);
+                return interaction.reply({ embeds: [embed] });
             }
         }
 
         // --- /RANKBINDS COMMAND ---
         if (interaction.commandName === 'rankbinds') {
             if (callerAdminLevel === 0) {
-                const noPerms = new EmbedBuilder().setDescription("You are missing bot administrator verification to adjust server rank settings.").setColor(0xE67E22);
-                return interaction.reply({ embeds: [noPerms], ephemeral: true });
+                const embed = new EmbedBuilder().setDescription("You must be an authorized bot admin to adjust rank configurations.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
-            const groupId = interaction.options.getInteger('groupid');
-            const rankId = interaction.options.getInteger('rankid');
-            const prefix = interaction.options.getString('prefix');
-            const role = interaction.options.getRole('role');
+            const subcommand = interaction.options.getSubcommand();
 
-            serverConfig.groupId = groupId; 
-            serverConfig.binds[rankId] = { prefix: prefix, roleId: role.id };
-            saveDB();
+            if (subcommand === 'add') {
+                const groupId = interaction.options.getInteger('groupid');
+                const rankId = interaction.options.getInteger('rankid');
+                const prefix = interaction.options.getString('prefix');
+                const role = interaction.options.getRole('role');
 
-            const embed = new EmbedBuilder()
-                .setTitle("Rank Bind Set")
-                .setDescription(`Successfully bound Roblox Rank **${rankId}** in Group **${groupId}** to prefix \`${prefix}\` and Discord role ${role}.`)
-                .setColor(0x3498DB);
+                serverConfig.groupId = groupId; 
+                serverConfig.binds[rankId] = { prefix: prefix, roleId: role.id };
+                saveDB();
 
-            await interaction.reply({ embeds: [embed] });
-            return;
+                const embed = new EmbedBuilder().setDescription(`Successfully bound Roblox Rank **${rankId}** in Group **${groupId}** to prefix \`${prefix}\` and Discord role ${role}.`).setColor(0x3498DB);
+                return interaction.reply({ embeds: [embed] });
+            }
+
+            if (subcommand === 'delete') {
+                const rankId = interaction.options.getInteger('rankid');
+
+                if (!serverConfig.binds || !serverConfig.binds[rankId]) {
+                    const embed = new EmbedBuilder().setDescription(`There is no active rank bind configured for Roblox Rank ID **${rankId}** in this server.`).setColor(0xE67E22);
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
+                }
+
+                delete serverConfig.binds[rankId];
+                saveDB();
+
+                const embed = new EmbedBuilder().setDescription(`Successfully removed the binding configuration for Roblox Rank ID **${rankId}**.`).setColor(0x3498DB);
+                return interaction.reply({ embeds: [embed] });
+            }
         }
 
         // --- /UPDATE COMMAND ---
         if (interaction.commandName === 'update') {
             if (!serverConfig || !serverConfig.groupId) {
-                const configFailEmbed = new EmbedBuilder()
-                    .setDescription("This server hasn't set up group rank bindings yet. Please contact an admin.")
-                    .setColor(0xE67E22);
-                return interaction.reply({ embeds: [configFailEmbed], ephemeral: true });
+                const embed = new EmbedBuilder().setDescription("This server has not configured any group rank binds yet.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
             }
 
             await interaction.deferReply();
 
             let robloxUser = null;
-            if (serverConfig.verifiedUsers && serverConfig.verifiedUsers[member.id]) {
-                const storedUserId = serverConfig.verifiedUsers[member.id];
+            
+            if (db.globalVerifiedUsers && db.globalVerifiedUsers[member.id]) {
+                const storedUserId = db.globalVerifiedUsers[member.id];
                 robloxUser = await getRobloxUserById(storedUserId);
             }
 
             if (!robloxUser) {
                 const currentName = member.nickname || member.user.username;
-                const cleanRobloxName = currentName.replace(/^\[[^\]]+\]\s*/, '').trim();
-                robloxUser = await getRobloxUser(cleanRobloxName);
+                const cleanName = currentName.replace(/^\[[^\]]+\]\s*/, '').trim();
+                robloxUser = await getRobloxUser(cleanName);
             }
 
             if (!robloxUser) {
-                const verifyFailEmbed = new EmbedBuilder()
-                    .setDescription("Could not find your verified Roblox account. Please run `!verify` first.")
-                    .setColor(0xE67E22);
-                return interaction.editReply({ embeds: [verifyFailEmbed] });
+                const embed = new EmbedBuilder().setDescription("Could not find your linked Roblox profile. Please make sure your Discord nickname or username matches your Roblox account, then try again.").setColor(0xE67E22);
+                return interaction.editReply({ embeds: [embed] });
             }
 
-            if (!serverConfig.verifiedUsers) serverConfig.verifiedUsers = {};
-            serverConfig.verifiedUsers[member.id] = robloxUser.id;
+            db.globalVerifiedUsers[member.id] = robloxUser.id;
             saveDB();
 
             const rankValue = await getRobloxUserRank(robloxUser.id, serverConfig.groupId);
@@ -669,112 +747,253 @@ client.on('interactionCreate', async interaction => {
             }
 
             if (specificRankRoleId) {
-                const specificRankRole = guild.roles.cache.get(specificRankRoleId);
-                if (specificRankRole && !member.roles.cache.has(specificRankRole.id)) {
-                    await member.roles.add(specificRankRole.id).catch(() => {});
-                    rolesAddedList.push(specificRankRole.toString());
+                const targetRoleObj = guild.roles.cache.get(specificRankRoleId);
+                if (targetRoleObj && !member.roles.cache.has(targetRoleObj.id)) {
+                    await member.roles.add(targetRoleObj.id).catch(() => {});
+                    rolesAddedList.push(targetRoleObj.toString());
                 }
             }
 
-            await sendVerificationLog(guild, member, robloxUser, "Profile Auto-Scan");
-
-            // Fixed layout strings mirroring exactly (image_b687fc.png)
-            const updateEmbed = new EmbedBuilder()
-                .setTitle("Roles Update")
-                .setDescription("Succesfully updated user roles")
+            const embed = new EmbedBuilder()
+                .setTitle("Profile Settings Synchronized")
+                .setDescription(`Successfully verified data tables for **${robloxUser.username}**.`)
                 .addFields(
-                    { name: "Nickname", value: `${newNickname}` },
-                    { name: "Roles Added", value: rolesAddedList.length > 0 ? rolesAddedList.join(', ') : "None" },
-                    { name: "Roles Removed", value: rolesRemovedList.length > 0 ? rolesRemovedList.join(', ') : "None" }
+                    { name: "Prefix Applied", value: `\`${assignedPrefix}\``, inline: true },
+                    { name: "Group Rank ID", value: `\`${rankValue}\``, inline: true },
+                    { name: "Granted Roles", value: rolesAddedList.length > 0 ? rolesAddedList.join(', ') : "None", inline: false },
+                    { name: "Removed Roles", value: rolesRemovedList.length > 0 ? rolesRemovedList.join(', ') : "None", inline: false }
                 )
-                .setColor(0x2B2D31);
+                .setColor(0x3498DB);
 
-            await interaction.editReply({ embeds: [updateEmbed] });
+            return interaction.editReply({ embeds: [embed] });
+        }
+
+        // --- /ROBLOX-COOKIE COMMAND ---
+        if (interaction.commandName === 'roblox-cookie') {
+            if (callerAdminLevel < 5) {
+                const embed = new EmbedBuilder().setDescription("Access Denied. You must be at least a Level 5 Admin to run this.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+            const inputCookie = interaction.options.getString('cookie');
+            const targetGroup = interaction.options.getString('groupid');
+
+            try {
+                const userLookup = await request('https://users.roblox.com/v1/users/authenticated', {
+                    method: 'GET',
+                    headers: { 'Cookie': `.ROBLOX_SECURITY=${inputCookie}` }
+                });
+
+                if (userLookup.statusCode !== 200) {
+                    const embed = new EmbedBuilder().setDescription("Roblox API rejected the provided cookie token.").setColor(0xE67E22);
+                    return interaction.editReply({ embeds: [embed] });
+                }
+
+                const userData = await userLookup.body.json();
+                serverConfig.robloxCookie = inputCookie;
+                serverConfig.groupId = Number(targetGroup);
+                saveDB();
+
+                const embed = new EmbedBuilder().setDescription(`Successfully logged in as **${userData.name}** (\`${userData.id}\`). Linked to Group: \`${targetGroup}\`.`).setColor(0x3498DB);
+                return interaction.editReply({ embeds: [embed] });
+            } catch (err) {
+                console.error(err);
+                const embed = new EmbedBuilder().setDescription("Could not connect to Roblox authentication endpoints.").setColor(0xE67E22);
+                return interaction.editReply({ embeds: [embed] });
+            }
+        }
+
+        // --- /PROMOTE COMMAND ---
+        if (interaction.commandName === 'promote') {
+            if (callerAdminLevel < 5) {
+                const embed = new EmbedBuilder().setDescription("Access Denied. You must be at least a Level 5 Admin to rank users.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+            if (!serverConfig.robloxCookie || !serverConfig.groupId) {
+                const embed = new EmbedBuilder().setDescription("Missing authentication values. Please set `/roblox-cookie` first.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+
+            await interaction.deferReply();
+            const username = interaction.options.getString('username');
+            const profile = await getRobloxUser(username);
+
+            if (!profile) {
+                const embed = new EmbedBuilder().setDescription(`Could not find a Roblox account named \`${username}\`.`).setColor(0xE67E22);
+                return interaction.editReply({ embeds: [embed] });
+            }
+
+            try {
+                const token = await fetchRobloxTokenSignature(serverConfig.robloxCookie);
+                const res = await request(`https://groups.roblox.com/v1/groups/${serverConfig.groupId}/users/${profile.id}/promote`, {
+                    method: 'POST',
+                    headers: { 'Cookie': `.ROBLOX_SECURITY=${serverConfig.robloxCookie}`, 'X-CSRF-TOKEN': token || '' }
+                });
+
+                const data = await res.body.json();
+                if (res.statusCode !== 200) {
+                    const embed = new EmbedBuilder().setDescription(`Promotion failed: ${data.errors ? data.errors[0].message : 'Unknown ranking error.'}`).setColor(0xE67E22);
+                    return interaction.editReply({ embeds: [embed] });
+                }
+
+                const embed = new EmbedBuilder().setDescription(`⚡ **${profile.username}** has been promoted to **${data.newRole.name}** (\`Rank ${data.newRole.rank}\`).`).setColor(0x3498DB);
+                return interaction.editReply({ embeds: [embed] });
+            } catch (e) {
+                const embed = new EmbedBuilder().setDescription("Network failure while updating rank settings on Roblox.").setColor(0xE67E22);
+                return interaction.editReply({ embeds: [embed] });
+            }
+        }
+
+        // --- /DEMOTE COMMAND ---
+        if (interaction.commandName === 'demote') {
+            if (callerAdminLevel < 5) {
+                const embed = new EmbedBuilder().setDescription("Access Denied. You must be at least a Level 5 Admin to rank users.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+            if (!serverConfig.robloxCookie || !serverConfig.groupId) {
+                const embed = new EmbedBuilder().setDescription("Missing authentication values. Please set `/roblox-cookie` first.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+
+            await interaction.deferReply();
+            const username = interaction.options.getString('username');
+            const profile = await getRobloxUser(username);
+
+            if (!profile) {
+                const embed = new EmbedBuilder().setDescription(`Could not find a Roblox account named \`${username}\`.`).setColor(0xE67E22);
+                return interaction.editReply({ embeds: [embed] });
+            }
+
+            try {
+                const token = await fetchRobloxTokenSignature(serverConfig.robloxCookie);
+                const res = await request(`https://groups.roblox.com/v1/groups/${serverConfig.groupId}/users/${profile.id}/demote`, {
+                    method: 'POST',
+                    headers: { 'Cookie': `.ROBLOX_SECURITY=${serverConfig.robloxCookie}`, 'X-CSRF-TOKEN': token || '' }
+                });
+
+                const data = await res.body.json();
+                if (res.statusCode !== 200) {
+                    const embed = new EmbedBuilder().setDescription(`Demotion failed: ${data.errors ? data.errors[0].message : 'Unknown ranking error.'}`).setColor(0xE67E22);
+                    return interaction.editReply({ embeds: [embed] });
+                }
+
+                const embed = new EmbedBuilder().setDescription(`🔻 **${profile.username}** has been demoted to **${data.newRole.name}** (\`Rank ${data.newRole.rank}\`).`).setColor(0x3498DB);
+                return interaction.editReply({ embeds: [embed] });
+            } catch (e) {
+                const embed = new EmbedBuilder().setDescription("Network failure while updating rank settings on Roblox.").setColor(0xE67E22);
+                return interaction.editReply({ embeds: [embed] });
+            }
+        }
+
+        // --- /SET-RANK COMMAND ---
+        if (interaction.commandName === 'set-rank') {
+            if (callerAdminLevel < 5) {
+                const embed = new EmbedBuilder().setDescription("Access Denied. You must be at least a Level 5 Admin to directly change ranks.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+            if (!serverConfig.robloxCookie || !serverConfig.groupId) {
+                const embed = new EmbedBuilder().setDescription("Missing authentication values. Please set `/roblox-cookie` first.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+
+            await interaction.deferReply();
+            const username = interaction.options.getString('username');
+            const targetRankId = interaction.options.getInteger('rankid');
+
+            const profile = await getRobloxUser(username);
+            if (!profile) {
+                const embed = new EmbedBuilder().setDescription(`Could not find a Roblox account named \`${username}\`.`).setColor(0xE67E22);
+                return interaction.editReply({ embeds: [embed] });
+            }
+
+            const rolesList = await fetchRobloxRoleSets(serverConfig.groupId);
+            const targetedRoleMatch = rolesList.find(r => r.rank === targetRankId);
+
+            if (!targetedRoleMatch) {
+                const embed = new EmbedBuilder().setDescription(`The rank value \`${targetRankId}\` does not exist inside your bound Roblox Group.`).setColor(0xE67E22);
+                return interaction.editReply({ embeds: [embed] });
+            }
+
+            try {
+                const token = await fetchRobloxTokenSignature(serverConfig.robloxCookie);
+                
+                const res = await request(`https://groups.roblox.com/v1/groups/${serverConfig.groupId}/users/${profile.id}`, {
+                    method: 'PATCH',
+                    headers: { 
+                        'Cookie': `.ROBLOX_SECURITY=${serverConfig.robloxCookie}`, 
+                        'X-CSRF-TOKEN': token || '',
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ roleId: targetedRoleMatch.id })
+                });
+
+                if (res.statusCode !== 200) {
+                    const data = await res.body.json();
+                    const embed = new EmbedBuilder().setDescription(`Ranking failed: ${data.errors ? data.errors[0].message : 'Unknown API failure.'}`).setColor(0xE67E22);
+                    return interaction.editReply({ embeds: [embed] });
+                }
+
+                const embed = new EmbedBuilder().setDescription(`⚙️ **${profile.username}** has been directly set to rank **${targetedRoleMatch.name}** (\`Rank ${targetedRoleMatch.rank}\`).`).setColor(0x3498DB);
+                return interaction.editReply({ embeds: [embed] });
+            } catch (err) {
+                const embed = new EmbedBuilder().setDescription("Network failure while contacting Roblox group engines.").setColor(0xE67E22);
+                return interaction.editReply({ embeds: [embed] });
+            }
         }
     }
 
-    if (interaction.isButton() || interaction.isStringSelectMenu()) {
-        const { customId, user } = interaction;
+    // --- BUTTON COMPONENT INTERACTION LOGIC ---
+    if (interaction.isButton()) {
+        if (interaction.customId.startsWith('ticket_btn_')) {
+            const ticketType = interaction.customId.replace('ticket_btn_', '');
+            const userId = interaction.user.id;
 
-        if (customId.startsWith('ticket_btn_')) {
-            const cooldownKey = `${user.id}-${guild.id}`;
-            if (cooldowns.has(cooldownKey)) {
-                const remaining = Math.ceil((cooldowns.get(cooldownKey) - Date.now()) / 1000);
+            if (!serverConfig.ticketCategory) {
+                const embed = new EmbedBuilder().setDescription("Tickets cannot be opened because an administrator has not configured a category workspace yet.").setColor(0xE67E22);
+                return interaction.reply({ embeds: [embed], ephemeral: true });
+            }
+
+            if (cooldowns.has(userId)) {
+                const remaining = Math.ceil((cooldowns.get(userId) - Date.now()) / 1000);
                 if (remaining > 0) {
-                    const cooldownEmbed = new EmbedBuilder()
-                        .setTitle('Warning - Cooldown')
-                        .setDescription(`You're currently on a **${remaining}s** cooldown for the **Create Ticket** button!`)
-                        .setColor(0x2B2D31);
-                    return interaction.reply({ embeds: [cooldownEmbed], ephemeral: true });
+                    const embed = new EmbedBuilder().setDescription(`Please wait **${remaining}s** before opening another support ticket channel.`).setColor(0xE67E22);
+                    return interaction.reply({ embeds: [embed], ephemeral: true });
                 }
             }
-            cooldowns.set(cooldownKey, Date.now() + 18000);
-            setTimeout(() => cooldowns.delete(cooldownKey), 18000);
-        }
 
-        if (customId === 'ticket_btn_report') {
-            const selectMenu = new StringSelectMenuBuilder()
-                .setCustomId('ticket_select_creation')
-                .setPlaceholder('Select Ticket Type')
-                .addOptions([
-                    { label: 'Report High Rank', description: 'Report a high ranking officer.', value: 'rep_hr' },
-                    { label: 'Report Exploiter', description: 'Report an exploiter in game to our moderation team', value: 'rep_exploit' },
-                    { label: 'Report Corruption', description: 'Report a corrupted user', value: 'rep_corrupt' },
-                    { label: 'Report Abuser', description: 'Report an abuser', value: 'rep_abuse' },
-                    { label: 'Report Rule Breaker', description: 'Report a rule breaker', value: 'rep_rules' }
-                ]);
+            cooldowns.set(userId, Date.now() + 18000);
+            setTimeout(() => cooldowns.delete(userId), 18000);
 
-            const row = new ActionRowBuilder().addComponents(selectMenu);
-            return interaction.reply({ content: 'Please select what ticket you wish to create.', components: [row], ephemeral: true });
-        }
-
-        if (customId === 'ticket_btn_other') {
-            const selectMenu = new StringSelectMenuBuilder()
-                .setCustomId('ticket_select_creation')
-                .setPlaceholder('Select Ticket Type')
-                .addOptions([
-                    { label: 'Report Bug / Glitch', description: 'Report an in game / discord glitch or bug to our developers', value: 'oth_bug' },
-                    { label: 'Report Exploit Script', description: 'Report an exploit script or vulnerability to our developers', value: 'oth_script' },
-                    { label: 'Developer Application', description: 'Apply to become a developer for British Army', value: 'oth_dev' },
-                    { label: 'Alliance Application', description: 'Apply to become an ally with the British Army', value: 'oth_alliance' }
-                ]);
-
-            const row = new ActionRowBuilder().addComponents(selectMenu);
-            return interaction.reply({ content: 'Please select what ticket you wish to create.', components: [row], ephemeral: true });
-        }
-
-        if (customId === 'ticket_select_creation') {
             await interaction.deferReply({ ephemeral: true });
-            const choice = interaction.values[0];
-            
-            const parentCategory = serverConfig.ticketCategory ? guild.channels.cache.get(serverConfig.ticketCategory) : null;
-            let ticketNum = (serverConfig.ticketCount || 0) + 1;
-            serverConfig.ticketCount = ticketNum;
+
+            if (!serverConfig.ticketCount) serverConfig.ticketCount = 0;
+            serverConfig.ticketCount++;
             saveDB();
 
-            const labelMap = {
-                'rep_hr': 'high-rank', 'rep_exploit': 'exploiter', 'rep_corrupt': 'corruption', 'rep_abuse': 'abuser', 'rep_rules': 'rule-breaker',
-                'oth_bug': 'bug-glitch', 'oth_script': 'exploit-script', 'oth_dev': 'developer-app', 'oth_alliance': 'alliance-app'
-            };
-            const ticketName = `ticket-${labelMap[choice] || 'general'}-${String(ticketNum).padStart(4, '0')}`;
+            const paddedCount = String(serverConfig.ticketCount).padStart(4, '0');
+            const channelName = `ticket-${ticketType}-${paddedCount}`;
 
-            const channel = await guild.channels.create({
-                name: ticketName,
+            const ticketChannel = await guild.channels.create({
+                name: channelName,
                 type: ChannelType.GuildText,
-                parent: parentCategory ? parentCategory.id : null,
+                parent: serverConfig.ticketCategory,
                 permissionOverwrites: [
                     { id: guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                    { id: user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
+                    { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages, PermissionsBitField.Flags.ReadMessageHistory] }
                 ]
             });
 
             const welcomeEmbed = new EmbedBuilder()
-                .setTitle('Ticket Opened')
-                .setDescription(`Welcome ${user}, our support team will be with you shortly.\nCategory selected: **${ticketName.replace('ticket-', '')}**`)
-                .setColor(0xBE1E2D);
+                .setTitle(`${ticketType.toUpperCase()} TICKET CREATED`)
+                .setDescription(`Welcome ${interaction.user}. Support details will report here to assist you shortly.\nTo invite others, utilize \`/ticket add\`.`)
+                .setColor(0x3498DB)
+                .setTimestamp();
 
-            await channel.send({ content: `${user} welcome`, embeds: [welcomeEmbed] });
-            return interaction.editReply({ content: `✅ Ticket environment compiled: ${channel}` });
+            await ticketChannel.send({ content: `${interaction.user}`, embeds: [welcomeEmbed] });
+
+            const finishEmbed = new EmbedBuilder().setDescription(`Your ticket channel has been opened inside ${ticketChannel}`).setColor(0x3498DB);
+            return interaction.editReply({ embeds: [finishEmbed] });
         }
     }
 });
