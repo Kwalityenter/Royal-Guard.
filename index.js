@@ -9,7 +9,10 @@ const {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle, 
-    PermissionsBitField
+    PermissionsBitField,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require('discord.js');
 const { request } = require('undici');
 const fs = require('fs');
@@ -252,14 +255,23 @@ async function getRobloxUserRank(userId, groupId) {
     return 0;
 }
 
-async function executeUserUpdate(interaction, member, serverConfig) {
+async function executeUserUpdate(target, member, serverConfig, explicitUserId = null) {
     let robloxUser = null;
-    if (db.globalVerifiedUsers && db.globalVerifiedUsers[member.id]) robloxUser = await getRobloxUserById(db.globalVerifiedUsers[member.id]);
-    if (!robloxUser) robloxUser = await getRobloxUser((member.nickname || member.user.username).replace(/^\[[^\]]+\]\s*/, '').trim());
+    
+    if (explicitUserId) {
+        robloxUser = await getRobloxUserById(explicitUserId);
+    } else if (db.globalVerifiedUsers && db.globalVerifiedUsers[member.id]) {
+        robloxUser = await getRobloxUserById(db.globalVerifiedUsers[member.id]);
+    }
+    
+    if (!robloxUser) {
+        robloxUser = await getRobloxUser((member.nickname || member.user.username).replace(/^\[[^\]]+\]\s*/, '').trim());
+    }
     
     if (!robloxUser) {
         const errEmbed = new EmbedBuilder().setDescription("Could not find your linked Roblox profile. Match your name and try again.").setColor('#E67E22');
-        return interaction.deferred || interaction.replied ? interaction.editReply({ embeds: [errEmbed] }) : interaction.reply({ embeds: [errEmbed], ephemeral: true });
+        if (target.send) return target.send({ embeds: [errEmbed] });
+        return target.deferred || target.replied ? target.editReply({ embeds: [errEmbed] }) : target.reply({ embeds: [errEmbed], ephemeral: true });
     }
 
     if (!db.globalVerifiedUsers) db.globalVerifiedUsers = {};
@@ -269,7 +281,8 @@ async function executeUserUpdate(interaction, member, serverConfig) {
     const rankValue = await getRobloxUserRank(robloxUser.id, serverConfig.groupId);
     if (rankValue === 0) {
         const groupErr = new EmbedBuilder().setTitle("Verification Denied").setDescription(`You are not in the Roblox Group (ID: \`${serverConfig.groupId}\`).`).setColor('#E67E22');
-        return interaction.deferred || interaction.replied ? interaction.editReply({ embeds: [groupErr] }) : interaction.reply({ embeds: [groupErr], ephemeral: true });
+        if (target.send) return target.send({ embeds: [groupErr] });
+        return target.deferred || target.replied ? target.editReply({ embeds: [groupErr] }) : target.reply({ embeds: [groupErr], ephemeral: true });
     }
 
     const bindConfig = serverConfig.binds ? serverConfig.binds[String(rankValue)] : null;
@@ -284,7 +297,7 @@ async function executeUserUpdate(interaction, member, serverConfig) {
     const formatPrefix = assignedPrefix !== "None" ? `${assignedPrefix} ` : "";
     await member.setNickname(`${formatPrefix}${robloxUser.username}`.substring(0, 32)).catch(() => {});
     
-    const verifiedRole = interaction.guild.roles.cache.find(r => r.name === VERIFIED_ROLE_NAME);
+    const verifiedRole = member.guild.roles.cache.find(r => r.name === VERIFIED_ROLE_NAME);
     if (verifiedRole) await member.roles.add(verifiedRole).catch(() => {});
 
     let rolesAddedText = "None";
@@ -314,19 +327,24 @@ async function executeUserUpdate(interaction, member, serverConfig) {
         )
         .setColor('#2F619E'); 
 
-    return interaction.deferred || interaction.replied ? interaction.editReply({ embeds: [responseEmbed] }) : interaction.reply({ embeds: [responseEmbed], ephemeral: true });
+    if (target.send) return target.send({ embeds: [responseEmbed] });
+    return target.deferred || target.replied ? target.editReply({ embeds: [responseEmbed] }) : target.reply({ embeds: [responseEmbed], ephemeral: true });
 }
 
-// --- OPEN TICKET HELPER FUNCTION ---
 async function handleTicketGeneration(interaction, type, serverConfig, guild) {
     if (!serverConfig.ticketCategory) {
         return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Ticket system configuration error.").setColor('#E67E22')], ephemeral: true });
     }
 
+    // --- FIX: ACTIVE TIMESTAMPS EVALUATION FOR COOLDOWN ---
+    const now = Date.now();
     if (cooldowns.has(interaction.user.id)) {
-        return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Please wait before opening another ticket.").setColor('#E67E22')], ephemeral: true });
+        const expirationTime = cooldowns.get(interaction.user.id);
+        if (now < expirationTime) {
+            return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Please wait before opening another ticket.").setColor('#E67E22')], ephemeral: true });
+        }
     }
-    cooldowns.set(interaction.user.id, Date.now() + 10000);
+    cooldowns.set(interaction.user.id, now + 10000); // 10-second window setup
 
     await interaction.deferReply({ ephemeral: true });
     serverConfig.ticketCount = (serverConfig.ticketCount || 0) + 1;
@@ -342,8 +360,14 @@ async function handleTicketGeneration(interaction, type, serverConfig, guild) {
         ]
     });
 
-    await channel.send({ content: `${interaction.user}`, embeds: [new EmbedBuilder().setTitle("Ticket Opened").setDescription("Please describe your issue here.").setColor('#2F619E')] });
-    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Your ticket has been created: ${channel}`).setColor('#2F619E')] });
+    await interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Your ticket has been created: ${channel}`).setColor('#2F619E')] });
+
+    if (type === 'verification') {
+        await channel.send({ content: `${interaction.user}`, embeds: [new EmbedBuilder().setTitle("Verification Ticket").setDescription("Running automatic verification sequence now.").setColor('#2F619E')] });
+        return await executeUserUpdate(channel, interaction.member, serverConfig);
+    } else {
+        return await channel.send({ content: `${interaction.user}`, embeds: [new EmbedBuilder().setTitle("Ticket Opened").setDescription("Please describe your issue here.").setColor('#2F619E')] });
+    }
 }
 
 client.on('interactionCreate', async interaction => {
@@ -372,7 +396,7 @@ client.on('interactionCreate', async interaction => {
                 .setColor('#2F619E'); 
 
             const actionButtonsRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('panel_roblox_login').setLabel('Verify via ROBLOX Login').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('panel_roblox_login').setLabel('Verify via ROBLOX').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('ticket_btn_verification').setLabel('Verify via Verification Tickets').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('panel_update_roles').setLabel('Update Roles').setStyle(ButtonStyle.Success)
             );
@@ -468,21 +492,62 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (interaction.isButton()) {
-        // Handle Roblox verification interaction via the main panel button
-        if (interaction.customId === 'panel_roblox_login' || interaction.customId === 'panel_update_roles') {
+        if (interaction.customId === 'panel_roblox_login') {
+            if (!serverConfig.groupId) {
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Roblox configuration is missing.").setColor('#E67E22')], ephemeral: true });
+            }
+
+            const modal = new ModalBuilder()
+                .setCustomId('verification_modal')
+                .setTitle('Roblox Verification');
+
+            const usernameInput = new TextInputBuilder()
+                .setCustomId('modal_roblox_username')
+                .setLabel('Enter your Roblox Username')
+                .setStyle(TextInputStyle.Short)
+                .setPlaceholder('Username goes here')
+                .setRequired(true);
+
+            modal.addComponents(new ActionRowBuilder().addComponents(usernameInput));
+            return await interaction.showModal(modal);
+        }
+
+        if (interaction.customId === 'panel_update_roles') {
             if (!serverConfig.groupId) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Roblox systems are not linked.").setColor('#E67E22')], ephemeral: true });
             return executeUserUpdate(interaction, member, serverConfig);
         }
 
-        // Handle verification ticket from the main panel button
         if (interaction.customId === 'ticket_btn_verification') {
             return handleTicketGeneration(interaction, 'verification', serverConfig, guild);
         }
 
-        // Handle custom stand-alone ticket panels created using the /ticket panel command
         if (interaction.customId.startsWith('ticket_btn_')) {
             const type = interaction.customId.replace('ticket_btn_', '');
             return handleTicketGeneration(interaction, type, serverConfig, guild);
+        }
+    }
+
+    if (interaction.isModalSubmit()) {
+        if (interaction.customId === 'verification_modal') {
+            const inputtedUsername = interaction.fields.getTextInputValue('modal_roblox_username');
+            await interaction.deferReply({ ephemeral: true });
+
+            const robloxUser = await getRobloxUser(inputtedUsername);
+            if (!robloxUser) {
+                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Roblox user not found.").setColor('#E67E22')] });
+            }
+
+            const statusString = `verify-${interaction.user.id}`;
+            if (!robloxUser.description.includes(statusString)) {
+                return interaction.editReply({
+                    embeds: [new EmbedBuilder()
+                        .setTitle("Verification Code Missing")
+                        .setDescription(`Please add this text to your Roblox profile description and submit again:\n\n\`${statusString}\``)
+                        .setColor('#E67E22')]
+                });
+            }
+
+            return executeUserUpdate(interaction, member, serverConfig, robloxUser.id);
         }
     }
 });
