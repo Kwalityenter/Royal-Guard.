@@ -1,19 +1,20 @@
 {
-  "1510602929462050837": {
+  "globalVerifiedUsers": {},
+  "1513178129613455530": {
     "groupId": 16882469,
     "binds": {
-      "252": "[OR-1] {roblox-username}"
+      "1": {
+        "prefix": null,
+        "roleId": "1515043659442294905"
+      }
     },
-    "verifiedUsers": {
-      "1151872484937834496": 2716911576
-    },
-    "adminUsers": {
-      "1512023413256880128": 7
-    },
-    "adminRoles": {
-      "1512107752896467117": 7
-    },
-    "logChannelId": "1510602930355703861",
-    "ticketCount": 1
+    "adminUsers": {},
+    "adminRoles": {},
+    "ticketCategory": "1515043863436464211",
+    "ticketCount": 5,
+    "robloxCookie": null,
+    "security": {
+      "antiPingEnabled": false
+    }
   }
 }
