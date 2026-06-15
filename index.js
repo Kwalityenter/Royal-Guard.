@@ -242,16 +242,20 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
         }
     }
 
+    // Embed matching reference layout styles
     const responseEmbed = new EmbedBuilder()
-        .setTitle("Roles Synced")
-        .setDescription(`Successfully updated configurations for **${robloxUser.username}**.`)
+        .setAuthor({ name: 'Royal Guard', iconURL: client.user.displayAvatarURL() })
+        .setTitle("ROBLOX DATA SYNCED")
+        .setDescription(`Successfully synchronized profile information for ${member}.`)
         .addFields(
-            { name: "Group Rank", value: String(rankValue), inline: true },
-            { name: "Prefix", value: assignedPrefix !== "None" ? assignedPrefix : "None", inline: true },
-            { name: "Roles Added", value: rolesAddedList.join(', ') || "None", inline: false },
-            { name: "Roles Removed", value: rolesRemovedList.join(', ') || "None", inline: false }
+            { name: "Roblox Account", value: `[${robloxUser.username}](https://www.roblox.com/users/${robloxUser.id}/profile)`, inline: true },
+            { name: "Roblox ID", value: `\`${robloxUser.id}\``, inline: true },
+            { name: "Group Rank", value: `\`${rankValue}\``, inline: true },
+            { name: "Roles Added", value: rolesAddedList.join(', ') || "`None`", inline: false },
+            { name: "Roles Removed", value: rolesRemovedList.join(', ') || "`None`", inline: false }
         )
-        .setColor('#2F619E');
+        .setColor('#2F619E')
+        .setTimestamp();
     
     return interaction.channel ? interaction.channel.send({ embeds: [responseEmbed] }) : interaction.editReply({ embeds: [responseEmbed] });
 }
@@ -611,7 +615,6 @@ client.on('interactionCreate', async interaction => {
             if (subcommand === 'panel') {
                 if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
                 
-                // Matches reference exactly
                 const reportEmbed = new EmbedBuilder()
                     .setAuthor({ name: 'Royal Guard', iconURL: client.user.displayAvatarURL() })
                     .setTitle("REPORT TICKETS")
@@ -690,7 +693,6 @@ client.on('interactionCreate', async interaction => {
         if (interaction.customId === 'ticket_trigger_report' || interaction.customId === 'ticket_trigger_other') {
             const isReport = interaction.customId === 'ticket_trigger_report';
             
-            // Set author object to user's identity precisely
             const dropEmbed = new EmbedBuilder()
                 .setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
                 .setTitle("Create Ticket")
