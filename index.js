@@ -190,7 +190,10 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
     
     if (!robloxUser) {
         const errEmbed = new EmbedBuilder().setDescription("Could not find your linked Roblox profile.").setColor('#E67E22');
-        return interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : interaction.editReply({ embeds: [errEmbed] });
+        if (interaction.editReply && (interaction.deferred || interaction.replied)) {
+            return interaction.editReply({ embeds: [errEmbed] });
+        }
+        return interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : null;
     }
 
     if (!db.globalVerifiedUsers) db.globalVerifiedUsers = {};
@@ -199,7 +202,10 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
 
     if (!serverConfig.groupId) {
         const errEmbed = new EmbedBuilder().setDescription("Group ID is not configured.").setColor('#E67E22');
-        return interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : interaction.editReply({ embeds: [errEmbed] });
+        if (interaction.editReply && (interaction.deferred || interaction.replied)) {
+            return interaction.editReply({ embeds: [errEmbed] });
+        }
+        return interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : null;
     }
 
     const rankValue = await getRobloxUserRank(robloxUser.id, serverConfig.groupId);
@@ -243,19 +249,22 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
         }
     }
 
-    // Header styled exactly like the ticket panels (Author + Clean Uppercase Title)
+    // Header styled exactly like the ticket panel system layout
     const responseEmbed = new EmbedBuilder()
         .setAuthor({ name: 'germanarmyholder.' })
-        .setTitle("ROLES UPDATE SYSTEM")
+        .setTitle("BRITISH ARMY ROLES UPDATE SYSTEM")
         .setDescription("Succesfully updated user roles")
         .addFields(
             { name: "Nickname", value: finalNickname, inline: false },
             { name: "Roles Added", value: rolesAddedList.length > 0 ? rolesAddedList.map(r => `• ${r}`).join('\n') : "None", inline: false },
             { name: "Roles Removed", value: rolesRemovedList.length > 0 ? rolesRemovedList.map(r => `• ${r}`).join('\n') : "None", inline: false }
         )
-        .setColor('#5DADE2'); // Light Blue for successful ops
+        .setColor('#5DADE2'); // Light Blue for success operations
     
-    return interaction.channel ? interaction.channel.send({ embeds: [responseEmbed] }) : interaction.editReply({ embeds: [responseEmbed] });
+    if (interaction.editReply && (interaction.deferred || interaction.replied)) {
+        return interaction.editReply({ embeds: [responseEmbed] });
+    }
+    return interaction.channel ? interaction.channel.send({ embeds: [responseEmbed] }) : null;
 }
 
 // ==========================================
