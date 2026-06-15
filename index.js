@@ -243,17 +243,17 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
         }
     }
 
-    // Embed structure matching image_9e34aa.png perfectly
+    // Header styled exactly like the ticket panels (Author + Clean Uppercase Title)
     const responseEmbed = new EmbedBuilder()
         .setAuthor({ name: 'germanarmyholder.' })
-        .setTitle("Roles Update")
+        .setTitle("ROLES UPDATE SYSTEM")
         .setDescription("Succesfully updated user roles")
         .addFields(
             { name: "Nickname", value: finalNickname, inline: false },
             { name: "Roles Added", value: rolesAddedList.length > 0 ? rolesAddedList.map(r => `• ${r}`).join('\n') : "None", inline: false },
             { name: "Roles Removed", value: rolesRemovedList.length > 0 ? rolesRemovedList.map(r => `• ${r}`).join('\n') : "None", inline: false }
         )
-        .setColor('#1f5387');
+        .setColor('#5DADE2'); // Light Blue for successful ops
     
     return interaction.channel ? interaction.channel.send({ embeds: [responseEmbed] }) : interaction.editReply({ embeds: [responseEmbed] });
 }
@@ -274,19 +274,26 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
             ]
         });
 
+        const closeTicketRow = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+                .setCustomId('btn_close_ticket')
+                .setLabel('Close Ticket')
+                .setStyle(ButtonStyle.Danger)
+        );
+
         if (selectionLabel === 'verification') {
             const step1Embed = new EmbedBuilder()
                 .setTitle("Roblox Verification")
-                .setDescription(`Hello ${interaction.user},\n\nPlease type your **Roblox Username** below to start verification.\n\nType \`cancel\` at any time to close this channel.`)
+                .setDescription(`Hello ${interaction.user},\n\nPlease type your **Roblox Username** below to start verification.\n\nType \`cancel\` or click the button below to close this channel.`)
                 .setFooter({ text: "Verification System | Step 1 of 3" })
-                .setColor('#1f5387');
+                .setColor('#5DADE2');
 
-            await ticketChannel.send({ embeds: [step1Embed] });
+            await ticketChannel.send({ embeds: [step1Embed], components: [closeTicketRow] });
             activeSessions.set(ticketChannel.id, { step: 1, userId: interaction.user.id, robloxId: null, robloxUsername: null, verificationCode: "" });
 
             const video1NotifyEmbed = new EmbedBuilder()
                 .setDescription(`Verification channel created. Please check ${ticketChannel} to verify your account.`)
-                .setColor('#1f5387');
+                .setColor('#5DADE2');
 
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ embeds: [video1NotifyEmbed] });
@@ -297,14 +304,14 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
             const cleanTitleLabel = selectionLabel.replace(/-/g, ' ').toUpperCase();
             const supportTicketEmbed = new EmbedBuilder()
                 .setTitle(`${cleanTitleLabel} TICKET`)
-                .setDescription(`Hello ${interaction.user},\n\nPlease describe your issue below details so staff can assist.\n\nType \`cancel\` at any time to close this channel.`)
-                .setColor('#1f5387');
+                .setDescription(`Hello ${interaction.user},\n\nPlease describe your issue below details so staff can assist.\n\nType \`cancel\` or click the button below to close this channel.`)
+                .setColor('#5DADE2');
 
-            await ticketChannel.send({ content: `${interaction.user}`, embeds: [supportTicketEmbed] });
+            await ticketChannel.send({ content: `${interaction.user}`, embeds: [supportTicketEmbed], components: [closeTicketRow] });
 
             const standardNotifyEmbed = new EmbedBuilder()
                 .setDescription(`Ticket channel created. Please check ${ticketChannel} to view your ticket.`)
-                .setColor('#1f5387');
+                .setColor('#5DADE2');
 
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ embeds: [standardNotifyEmbed] });
@@ -316,7 +323,7 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
         const ticketLog = new EmbedBuilder()
             .setTitle("Ticket Created")
             .setDescription(`Ticket **${selectionLabel}** opened by ${interaction.user} in ${ticketChannel}.`)
-            .setColor("#1f5387")
+            .setColor("#5DADE2")
             .setTimestamp();
         await sendLog(interaction.guild, 'tickets', ticketLog);
 
@@ -420,7 +427,7 @@ client.on('messageCreate', async message => {
                         { name: "Profile Link", value: `[View Profile](https://www.roblox.com/users/${robloxUser.id}/profile)`, inline: false }
                     )
                     .setFooter({ text: "Verification System | Step 2 of 3" })
-                    .setColor('#1f5387')
+                    .setColor('#5DADE2')
             ]});
         }
 
@@ -428,7 +435,7 @@ client.on('messageCreate', async message => {
             if (input.toLowerCase() === 'no') {
                 session.step = 1;
                 activeSessions.set(message.channel.id, session);
-                return message.reply({ embeds: [new EmbedBuilder().setDescription("Type your correct Roblox Username below:").setColor('#1f5387')] });
+                return message.reply({ embeds: [new EmbedBuilder().setDescription("Type your correct Roblox Username below:").setColor('#5DADE2')] });
             }
             if (input.toLowerCase() !== 'yes') {
                 return message.reply({ embeds: [new EmbedBuilder().setDescription("Invalid response. Type **YES** or **NO**.").setColor('#E67E22')] });
@@ -445,7 +452,7 @@ client.on('messageCreate', async message => {
                     .setDescription(`To verify you own this account, please copy the code below and paste it into your Roblox profile's **About** or **Description** section.`)
                     .addFields({ name: "Code to Copy", value: `\`${code}\``, inline: false })
                     .setFooter({ text: "Once you have saved your Roblox profile, type 'DONE' here." })
-                    .setColor('#1f5387')
+                    .setColor('#5DADE2')
             ]});
         }
 
@@ -471,7 +478,7 @@ client.on('messageCreate', async message => {
             const logEmbed = new EmbedBuilder()
                 .setTitle("User Verified")
                 .setDescription(`${message.author} linked to Roblox user **${session.robloxUsername}** (${session.robloxId}).`)
-                .setColor("#1f5387")
+                .setColor("#5DADE2")
                 .setTimestamp();
             await sendLog(message.guild, 'verification', logEmbed);
 
@@ -522,14 +529,14 @@ client.on('interactionCreate', async interaction => {
             }
             serverConfig.robloxCookie = interaction.options.getString('cookie');
             saveDB();
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Successfully updated the cookie.").setColor('#1f5387')], ephemeral: true });
+            return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Successfully updated the cookie.").setColor('#5DADE2')], ephemeral: true });
         }
 
         if (interaction.commandName === 'configure-group') {
             if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
             serverConfig.groupId = interaction.options.getInteger('group-id');
             saveDB();
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Bound to Group ID: **${serverConfig.groupId}**`).setColor('#1f5387')] });
+            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Bound to Group ID: **${serverConfig.groupId}**`).setColor('#5DADE2')] });
         }
 
         if (interaction.commandName === 'set-log-channel') {
@@ -539,7 +546,7 @@ client.on('interactionCreate', async interaction => {
             if (!serverConfig.logChannels) serverConfig.logChannels = {};
             serverConfig.logChannels[logType] = targetChan.id;
             saveDB();
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Logs for **${logType}** set to ${targetChan}`).setColor('#1f5387')] });
+            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Logs for **${logType}** set to ${targetChan}`).setColor('#5DADE2')] });
         }
 
         if (interaction.commandName === 'promote' || interaction.commandName === 'demote' || interaction.commandName === 'setrank') {
@@ -573,7 +580,7 @@ client.on('interactionCreate', async interaction => {
                         { name: "Old Rank", value: String(currentRank), inline: true },
                         { name: "New Rank", value: `${finalRankTarget} (${assignedRoleName})`, inline: true }
                     )
-                    .setColor("#1f5387")
+                    .setColor("#5DADE2")
                     .setTimestamp();
                 await sendLog(guild, 'moderation', rankLog);
 
@@ -583,7 +590,7 @@ client.on('interactionCreate', async interaction => {
                     if (foundMember) await executeUserUpdate(interaction, foundMember, serverConfig, targetProfile.id);
                 }
 
-                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Updated **${targetProfile.username}** to **${assignedRoleName}** (${finalRankTarget}).`).setColor('#1f5387')] });
+                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Updated **${targetProfile.username}** to **${assignedRoleName}** (${finalRankTarget}).`).setColor('#5DADE2')] });
             } catch (err) {
                 return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Error: ${err.message}`).setColor('#E67E22')] });
             }
@@ -596,7 +603,7 @@ client.on('interactionCreate', async interaction => {
                 .setAuthor({ name: 'germanarmyholder.' })
                 .setTitle("BRITISH ARMY VERIFICATION SYSTEM V5")
                 .setDescription("Press the buttons below to verify your ROBLOX account or access our help desks.")
-                .setColor("#1f5387");
+                .setColor("#5DADE2");
 
             const actionRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('panel_trigger_verify_login').setLabel('Verify via ROBLOX Login').setStyle(ButtonStyle.Success),
@@ -604,7 +611,7 @@ client.on('interactionCreate', async interaction => {
                 new ButtonBuilder().setCustomId('btn_update_roles').setLabel('Update Roles').setStyle(ButtonStyle.Success)
             );
             
-            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Verification panel posted.").setColor('#1f5387')], ephemeral: true });
+            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Verification panel posted.").setColor('#5DADE2')], ephemeral: true });
             return interaction.channel.send({ embeds: [verifyEmbed], components: [actionRow] });
         }
 
@@ -617,13 +624,13 @@ client.on('interactionCreate', async interaction => {
                     .setAuthor({ name: 'germanarmyholder.' })
                     .setTitle("REPORT TICKETS")
                     .setDescription("Select an option from the dropdown menu below to report an incident or user.")
-                    .setColor("#1f5387");
+                    .setColor("#5DADE2");
 
                 const otherEmbed = new EmbedBuilder()
                     .setAuthor({ name: 'germanarmyholder.' })
                     .setTitle("OTHER TICKETS")
                     .setDescription("Select an option from the dropdown menu below for tickets regarding other matters.")
-                    .setColor("#1f5387");
+                    .setColor("#5DADE2");
 
                 const menuReport = new StringSelectMenuBuilder()
                     .setCustomId('menu_ticket_report')
@@ -646,7 +653,7 @@ client.on('interactionCreate', async interaction => {
                         new StringSelectMenuOptionBuilder().setLabel('Alliance Application').setValue('other_alliance_app').setDescription('Apply to become an ally with the British Army')
                     );
                 
-                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Panels deployed.").setColor('#1f5387')], ephemeral: true });
+                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Panels deployed.").setColor('#5DADE2')], ephemeral: true });
                 await interaction.channel.send({ embeds: [reportEmbed], components: [new ActionRowBuilder().addComponents(menuReport)] });
                 return await interaction.channel.send({ embeds: [otherEmbed], components: [new ActionRowBuilder().addComponents(menuOther)] });
             }
@@ -655,7 +662,7 @@ client.on('interactionCreate', async interaction => {
                 if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
                 serverConfig.ticketCategory = interaction.options.getChannel('category').id;
                 saveDB();
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Ticket category configured.").setColor('#1f5387')] });
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Ticket category configured.").setColor('#5DADE2')] });
             }
         }
 
@@ -666,6 +673,24 @@ client.on('interactionCreate', async interaction => {
     }
 
     else if (interaction.isButton()) {
+        if (interaction.customId === 'btn_close_ticket') {
+            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Closing ticket... Channel will be deleted in 3 seconds.").setColor('#E67E22')] });
+            
+            if (activeSessions.has(interaction.channel.id)) {
+                activeSessions.delete(interaction.channel.id);
+            }
+            
+            const closeLog = new EmbedBuilder()
+                .setTitle("Ticket Closed")
+                .setDescription(`Ticket channel **${interaction.channel.name}** was closed by ${interaction.user}.`)
+                .setColor("#E67E22")
+                .setTimestamp();
+            await sendLog(guild, 'tickets', closeLog);
+            
+            setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
+            return;
+        }
+
         const cooldownKey = `${interaction.user.id}_ticket_cooldown`;
         if (interaction.customId.startsWith('panel_trigger_verify')) {
             if (cooldowns.has(cooldownKey)) {
