@@ -1,88 +1,208 @@
-const { SlashCommandBuilder, ChannelType } = require('discord.js');
-
 module.exports = [
-    new SlashCommandBuilder()
-        .setName('set-cookie')
-        .setDescription('Securely saves the .ROBLOSECURITY account session cookie.')
-        .addStringOption(option => 
-            option.setName('cookie')
-                .setDescription('The string value of your .ROBLOSECURITY cookie.')
-                .setRequired(true)),
-                
-    new SlashCommandBuilder()
-        .setName('configure-group')
-        .setDescription('Binds the server configuration to an active Roblox Group ID.')
-        .addIntegerOption(option => 
-            option.setName('group-id')
-                .setDescription('The numerical ID sequence of your target Roblox group.')
-                .setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('set-log-channel')
-        .setDescription('Redirects automated status logging pipelines to specific channels.')
-        .addStringOption(option =>
-            option.setName('type')
-                .setDescription('Select the tracking logs channel classification.')
-                .setRequired(true)
-                .addChoices(
-                    { name: 'Verification Tracking Logs', value: 'verification' },
-                    { name: 'Moderation System Logs', value: 'moderation' },
-                    { name: 'Tickets Action Logs', value: 'tickets' }
-                ))
-        .addChannelOption(option =>
-            option.setName('channel')
-                .setDescription('Target destination text channel.')
-                .addChannelTypes(ChannelType.GuildText)
-                .setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('promote')
-        .setDescription('Advances a specified Roblox user up by 1 rank tier inside the group.')
-        .addStringOption(option => 
-            option.setName('username')
-                .setDescription('Target Roblox username.')
-                .setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('demote')
-        .setDescription('Lowers a specified Roblox user down by 1 rank tier inside the group.')
-        .addStringOption(option => 
-            option.setName('username')
-                .setDescription('Target Roblox username.')
-                .setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('setrank')
-        .setDescription('Updates a Roblox account to a precise numerical rank code (1-255).')
-        .addStringOption(option => 
-            option.setName('username')
-                .setDescription('Target Roblox username.')
-                .setRequired(true))
-        .addIntegerOption(option =>
-            option.setName('rank-value')
-                .setDescription('The numerical rank value (1-255).')
-                .setRequired(true)),
-
-    new SlashCommandBuilder()
-        .setName('send-panel')
-        .setDescription('Deploys the verification panel framework to start user chains.'),
-
-    new SlashCommandBuilder()
-        .setName('update')
-        .setDescription('Performs an evaluation sync sweep on your local rank bindings.'),
-
-    new SlashCommandBuilder()
-        .setName('ticket')
-        .setDescription('Master control structures for ticket deployment.')
-        .addSubcommand(sub =>
-            sub.setName('panel')
-                .setDescription('Deploys the visual report and support drop-down panels.'))
-        .addSubcommand(sub =>
-            sub.setName('configure')
-                .setDescription('Maps the dynamic category assignment for generated tickets.')
-                .addChannelOption(opt =>
-                    opt.setName('category')
-                        .setDescription('Select the target layout category folder.')
-                        .addChannelTypes(ChannelType.GuildCategory)
-                        .setRequired(true)))
-].map(command => command.toJSON());
+    {
+        name: 'set-cookie',
+        description: 'Set the Roblox .ROBLOSECURITY cookie (Server Owner Only)',
+        options: [
+            {
+                type: 3, // STRING
+                name: 'cookie',
+                description: 'Your Roblox account cookie',
+                required: true
+            }
+        ]
+    },
+    {
+        name: 'configure-group',
+        description: 'Link a Roblox group ID to this server',
+        options: [
+            {
+                type: 4, // INTEGER
+                name: 'group-id',
+                description: 'The target Roblox Group ID',
+                required: true
+            }
+        ]
+    },
+    {
+        name: 'set-log-channel',
+        description: 'Configure logging channels for specific systems',
+        options: [
+            {
+                type: 3, // STRING
+                name: 'type',
+                description: 'The type of logs to send to this channel',
+                required: true,
+                choices: [
+                    { name: 'Tickets', value: 'tickets' },
+                    { name: 'Verification', value: 'verification' },
+                    { name: 'Moderation', value: 'moderation' }
+                ]
+            },
+            {
+                type: 7, // CHANNEL
+                name: 'channel',
+                description: 'The target text channel for logs',
+                required: true
+            }
+        ]
+    },
+    {
+        name: 'bind',
+        description: 'Manage RoWifi-style group rank binds',
+        options: [
+            {
+                type: 1, // SUB_COMMAND
+                name: 'add',
+                description: 'Bind a specific rank condition to a Discord role',
+                options: [
+                    { 
+                        type: 8, 
+                        name: 'role', 
+                        description: 'The Discord role to assign', 
+                        required: true 
+                    },
+                    { 
+                        type: 4, 
+                        name: 'rank-value', 
+                        description: 'The Roblox rank number (0-255)', 
+                        required: true 
+                    },
+                    {
+                        type: 3,
+                        name: 'comparison',
+                        description: 'How to evaluate the rank constraint',
+                        required: false,
+                        choices: [
+                            { name: 'Equal To (==)', value: '==' },
+                            { name: 'Greater Than or Equal To (>=)', value: '>=' },
+                            { name: 'Less Than or Equal To (<=)', value: '<=' },
+                            { name: 'Greater Than (>)', value: '>' },
+                            { name: 'Less Than (<)', value: '<' }
+                        ]
+                    },
+                    { 
+                        type: 3, 
+                        name: 'prefix', 
+                        description: 'Optional group text prefix tag (e.g., Cpl)', 
+                        required: false 
+                    }
+                ]
+            },
+            {
+                type: 1, // SUB_COMMAND
+                name: 'range',
+                description: 'Bind a range of ranks to a role',
+                options: [
+                    { 
+                        type: 8, 
+                        name: 'role', 
+                        description: 'The Discord role to assign', 
+                        required: true 
+                    },
+                    { 
+                        type: 4, 
+                        name: 'min-rank', 
+                        description: 'Minimum group rank threshold boundary', 
+                        required: true 
+                    },
+                    { 
+                        type: 4, 
+                        name: 'max-rank', 
+                        description: 'Maximum group rank threshold boundary', 
+                        required: true 
+                    },
+                    { 
+                        type: 3, 
+                        name: 'prefix', 
+                        description: 'Optional group text prefix tag', 
+                        required: false 
+                    }
+                ]
+            },
+            {
+                type: 1, // SUB_COMMAND
+                name: 'list',
+                description: 'List all active rank binds setup in this server'
+            },
+            {
+                type: 1, // SUB_COMMAND
+                name: 'clear',
+                description: 'Remove all rank binds from the configuration'
+            }
+        ]
+    },
+    {
+        name: 'promote',
+        description: 'Promote a Roblox user by 1 rank',
+        options: [
+            {
+                type: 3, // STRING
+                name: 'username',
+                description: 'The Roblox username to promote',
+                required: true
+            }
+        ]
+    },
+    {
+        name: 'demote',
+        description: 'Demote a Roblox user by 1 rank',
+        options: [
+            {
+                type: 3, // STRING
+                name: 'username',
+                description: 'The Roblox username to demote',
+                required: true
+            }
+        ]
+    },
+    {
+        name: 'setrank',
+        description: 'Set a Roblox user to a specific rank',
+        options: [
+            {
+                type: 3, // STRING
+                name: 'username',
+                description: 'The Roblox username',
+                required: true
+            },
+            {
+                type: 4, // INTEGER
+                name: 'rank-value',
+                description: 'The rank number to set (1-255)',
+                required: true
+            }
+        ]
+    },
+    {
+        name: 'send-panel',
+        description: 'Send the main verification button panel to the current channel'
+    },
+    {
+        name: 'ticket',
+        description: 'Manage the support ticket system',
+        options: [
+            {
+                type: 1, // SUB_COMMAND
+                name: 'panel',
+                description: 'Send the ticket creation dropdown panels'
+            },
+            {
+                type: 1, // SUB_COMMAND
+                name: 'configure',
+                description: 'Configure the ticket category channel',
+                options: [
+                    {
+                        type: 7, // CHANNEL
+                        name: 'category',
+                        description: 'The category channel where tickets will open',
+                        required: true
+                    }
+                ]
+            }
+        ]
+    },
+    {
+        name: 'update',
+        description: 'Update your own roles based on your Roblox group status'
+    }
+];

@@ -176,6 +176,9 @@ async function changeRobloxRank(guildId, robloxUserId, targetRankValue) {
     return targetRole.name;
 }
 
+// ==========================================
+// ROWIFI-STYLE MULTI-BIND EXECUTION ENGINE
+// ==========================================
 async function executeUserUpdate(interaction, member, serverConfig, explicitUserId = null) {
     let robloxUser = null;
     if (explicitUserId) {
@@ -208,17 +211,60 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
         return interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : null;
     }
 
-    const rankValue = await getRobloxUserRank(robloxUser.id, serverConfig.groupId);
-    const bindConfig = serverConfig.binds ? serverConfig.binds[String(rankValue)] : null;
-    let assignedPrefix = "None";
-    let targetRoleIds = [];
-
-    if (bindConfig) {
-        assignedPrefix = bindConfig.prefix ? `[${bindConfig.prefix.replace(/[\[\]]/g, '')}]` : "None";
-        targetRoleIds = bindConfig.roleIds || (bindConfig.roleId ? [bindConfig.roleId] : []);
+    // Auto-migrate legacy object configurations to RoWifi array format
+    if (serverConfig.binds && !Array.isArray(serverConfig.binds)) {
+        const legacyBinds = serverConfig.binds;
+        serverConfig.binds = [];
+        for (const [rk, data] of Object.entries(legacyBinds)) {
+            serverConfig.binds.push({
+                rank: parseInt(rk, 10),
+                compare: '==',
+                roleIds: data.roleIds || (data.roleId ? [data.roleId] : []),
+                prefix: data.prefix || null
+            });
+        }
+        saveDB();
     }
 
-    const formatPrefix = assignedPrefix !== "None" ? `${assignedPrefix} ` : "";
+    const rankValue = await getRobloxUserRank(robloxUser.id, serverConfig.groupId);
+    
+    const targetRoleIds = new Set();
+    const allManagedRoles = new Set();
+    let selectedPrefix = "None";
+    let highestPrefixWeight = -1;
+
+    if (serverConfig.binds && Array.isArray(serverConfig.binds)) {
+        for (const bind of serverConfig.binds) {
+            // Track all roles managed by this system to ensure accurate cleaning operations
+            if (bind.roleIds) bind.roleIds.forEach(id => allManagedRoles.add(id));
+            if (bind.roleId) allManagedRoles.add(bind.roleId);
+
+            let matches = false;
+            const comp = bind.compare || '==';
+            const targetRank = parseInt(bind.rank, 10);
+
+            // Conditional operators
+            if (comp === '==' && rankValue === targetRank) matches = true;
+            else if (comp === '>=' && rankValue >= targetRank) matches = true;
+            else if (comp === '<=' && rankValue <= targetRank) matches = true;
+            else if (comp === '>' && rankValue > targetRank) matches = true;
+            else if (comp === '<' && rankValue < targetRank) matches = true;
+            else if (comp === 'range' && rankValue >= parseInt(bind.minRank, 10) && rankValue <= parseInt(bind.maxRank, 10)) matches = true;
+
+            if (matches) {
+                if (bind.roleIds) bind.roleIds.forEach(id => targetRoleIds.add(id));
+                if (bind.roleId) targetRoleIds.add(bind.roleId);
+                
+                // Prioritize naming prefix based on rank assignment weight
+                if (bind.prefix && targetRank > highestPrefixWeight) {
+                    selectedPrefix = bind.prefix;
+                    highestPrefixWeight = targetRank;
+                }
+            }
+        }
+    }
+
+    const formatPrefix = selectedPrefix !== "None" ? `[${selectedPrefix.replace(/[\[\]]/g, '')}] ` : "";
     const finalNickname = `${formatPrefix}${robloxUser.username}`.substring(0, 32);
     await member.setNickname(finalNickname).catch(() => {});
     
@@ -228,28 +274,22 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
     let rolesAddedList = [];
     let rolesRemovedList = [];
 
-    if (targetRoleIds.length > 0) {
-        for (const rId of targetRoleIds) {
-            if (!member.roles.cache.has(rId)) {
-                await member.roles.add(rId).catch(() => {});
-                rolesAddedList.push(`<@&${rId}>`);
-            }
+    // Add required matched roles
+    for (const rId of targetRoleIds) {
+        if (!member.roles.cache.has(rId)) {
+            await member.roles.add(rId).catch(() => {});
+            rolesAddedList.push(`<@&${rId}>`);
         }
     }
 
-    for (const [rId, bind] of Object.entries(serverConfig.binds || {})) {
-        if (parseInt(rId, 10) !== rankValue) {
-            const structuralBinds = bind.roleIds || (bind.roleId ? [bind.roleId] : []);
-            for (const oldId of structuralBinds) {
-                if (member.roles.cache.has(oldId) && !targetRoleIds.includes(oldId)) {
-                    await member.roles.remove(oldId).catch(() => {});
-                    rolesRemovedList.push(`<@&${oldId}>`);
-                }
-            }
+    // Strip roles configured in the bind profile that the user no longer qualifies for
+    for (const rId of allManagedRoles) {
+        if (!targetRoleIds.has(rId) && member.roles.cache.has(rId)) {
+            await member.roles.remove(rId).catch(() => {});
+            rolesRemovedList.push(`<@&${rId}>`);
         }
     }
 
-    // Header styled exactly like the ticket panel system layout
     const responseEmbed = new EmbedBuilder()
         .setAuthor({ name: 'germanarmyholder.' })
         .setTitle("BRITISH ARMY ROLES UPDATE SYSTEM")
@@ -259,7 +299,7 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
             { name: "Roles Added", value: rolesAddedList.length > 0 ? rolesAddedList.map(r => `• ${r}`).join('\n') : "None", inline: false },
             { name: "Roles Removed", value: rolesRemovedList.length > 0 ? rolesRemovedList.map(r => `• ${r}`).join('\n') : "None", inline: false }
         )
-        .setColor('#5DADE2'); // Light Blue for success operations
+        .setColor('#5DADE2');
     
     if (interaction.editReply && (interaction.deferred || interaction.replied)) {
         return interaction.editReply({ embeds: [responseEmbed] });
@@ -525,7 +565,7 @@ client.on('interactionCreate', async interaction => {
     if (!guild) return;
 
     if (!db[guild.id]) {
-        db[guild.id] = { groupId: null, binds: {}, adminUsers: {}, adminRoles: {}, ticketCategory: null, ticketCount: 0, robloxCookie: null, logChannels: {} };
+        db[guild.id] = { groupId: null, binds: [], adminUsers: {}, adminRoles: {}, ticketCategory: null, ticketCount: 0, robloxCookie: null, logChannels: {} };
     }
     const serverConfig = db[guild.id];
     const callerAdminLevel = getAdminLevel(guild, member);
@@ -556,6 +596,81 @@ client.on('interactionCreate', async interaction => {
             serverConfig.logChannels[logType] = targetChan.id;
             saveDB();
             return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Logs for **${logType}** set to ${targetChan}`).setColor('#5DADE2')] });
+        }
+
+        // ==========================================
+        // ROWIFI-STYLE SLASH BIND SYSTEM COMMANDS
+        // ==========================================
+        if (interaction.commandName === 'bind') {
+            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
+            
+            const subcommand = interaction.options.getSubcommand();
+            if (!serverConfig.binds || !Array.isArray(serverConfig.binds)) {
+                serverConfig.binds = [];
+            }
+
+            if (subcommand === 'add') {
+                const role = interaction.options.getRole('role');
+                const compare = interaction.options.getString('comparison') || '==';
+                const rank = interaction.options.getInteger('rank-value');
+                const prefix = interaction.options.getString('prefix') || null;
+
+                serverConfig.binds.push({
+                    roleIds: [role.id],
+                    compare: compare,
+                    rank: rank,
+                    prefix: prefix
+                });
+                saveDB();
+
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Successfully bound: Users with rank **${compare} ${rank}** will receive ${role} (Prefix: \`${prefix || 'None'}\`).`).setColor('#5DADE2')] });
+            }
+
+            if (subcommand === 'range') {
+                const role = interaction.options.getRole('role');
+                const minRank = interaction.options.getInteger('min-rank');
+                const maxRank = interaction.options.getInteger('max-rank');
+                const prefix = interaction.options.getString('prefix') || null;
+
+                serverConfig.binds.push({
+                    roleIds: [role.id],
+                    compare: 'range',
+                    minRank: minRank,
+                    maxRank: maxRank,
+                    prefix: prefix
+                });
+                saveDB();
+
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Successfully bound range: Users with ranks **${minRank} through ${maxRank}** will receive ${role} (Prefix: \`${prefix || 'None'}\`).`).setColor('#5DADE2')] });
+            }
+
+            if (subcommand === 'clear') {
+                serverConfig.binds = [];
+                saveDB();
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Cleared all group rank binds.").setColor('#5DADE2')] });
+            }
+
+            if (subcommand === 'list') {
+                if (!serverConfig.binds || serverConfig.binds.length === 0) {
+                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("No binds configured yet.").setColor('#E67E22')] });
+                }
+
+                const listEmbed = new EmbedBuilder()
+                    .setAuthor({ name: 'germanarmyholder.' })
+                    .setTitle("BRITISH ARMY ROLE BIND LIST")
+                    .setColor('#5DADE2');
+
+                let descriptions = serverConfig.binds.map((b, i) => {
+                    const rolesStr = b.roleIds ? b.roleIds.map(id => `<@&${id}>`).join(', ') : `<@&${b.roleId}>`;
+                    if (b.compare === 'range') {
+                        return `**${i + 1}.** Rank \`[${b.minRank}-${b.maxRank}]\` ➔ ${rolesStr} *(Prefix: ${b.prefix || 'None'})*`;
+                    }
+                    return `**${i + 1}.** Rank \`${b.compare} ${b.rank}\` ➔ ${rolesStr} *(Prefix: ${b.prefix || 'None'})*`;
+                });
+
+                listEmbed.setDescription(descriptions.join('\n'));
+                return interaction.reply({ embeds: [listEmbed] });
+            }
         }
 
         if (interaction.commandName === 'promote' || interaction.commandName === 'demote' || interaction.commandName === 'setrank') {
