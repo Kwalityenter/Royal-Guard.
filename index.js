@@ -257,7 +257,7 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
 }
 
 // ==========================================
-// TICKET GENERATOR (VIDEO 1 EXACT REPLICA)
+// TICKET GENERATOR
 // ==========================================
 async function generateFinalTicket(interaction, channelPrefix, selectionLabel, categoryId) {
     try {
@@ -273,7 +273,6 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
         });
 
         if (selectionLabel === 'verification') {
-            // Step 1 Embed matching exact wording and style from Video 1
             const step1Embed = new EmbedBuilder()
                 .setTitle("Roblox Verification")
                 .setDescription(`Hello ${interaction.user},\n\nPlease type your **Roblox Username** below to start verification.\n\nType \`cancel\` at any time to close this channel.`)
@@ -283,7 +282,6 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
             await ticketChannel.send({ embeds: [step1Embed] });
             activeSessions.set(ticketChannel.id, { step: 1, userId: interaction.user.id, robloxId: null, robloxUsername: null, verificationCode: "" });
 
-            // Red confirmation reply in the original channel matching Video 1
             const video1NotifyEmbed = new EmbedBuilder()
                 .setDescription(`Verification channel created. Please check ${ticketChannel} to verify your account.`)
                 .setColor('#8C1D1D');
@@ -362,7 +360,6 @@ client.on('messageCreate', async message => {
     
     const authorAdminLevel = getAdminLevel(message.guild, message.member);
 
-    // Support !verify command exactly like Video 1
     if (message.content.toLowerCase().startsWith('!verify')) {
         if (!serverConfig.ticketCategory) {
             return message.reply({ embeds: [new EmbedBuilder().setDescription("Ticket category not configured.").setColor('#E67E22')] });
@@ -388,7 +385,6 @@ client.on('messageCreate', async message => {
         return await generateFinalTicket(simulatedInteraction, "verify", "verification", serverConfig.ticketCategory);
     }
 
-    // Interactive ticket session handling
     if (activeSessions.has(message.channel.id)) {
         const session = activeSessions.get(message.channel.id);
         if (session.userId !== message.author.id) return;
@@ -402,7 +398,6 @@ client.on('messageCreate', async message => {
             return;
         }
 
-        // Step 1 -> Step 2
         if (session.step === 1) {
             const robloxUser = await getRobloxUser(input);
             if (!robloxUser) {
@@ -427,7 +422,6 @@ client.on('messageCreate', async message => {
             ]});
         }
 
-        // Step 2 -> Step 3
         if (session.step === 2) {
             if (input.toLowerCase() === 'no') {
                 session.step = 1;
@@ -453,7 +447,6 @@ client.on('messageCreate', async message => {
             ]});
         }
 
-        // Step 3 Verification Check
         if (session.step === 3) {
             if (input.toLowerCase() !== 'done') {
                 return message.reply({ embeds: [new EmbedBuilder().setDescription("Type `DONE` when you have updated your Roblox description.").setColor('#E67E22')] });
@@ -485,7 +478,6 @@ client.on('messageCreate', async message => {
         }
     }
 
-    // Auto Moderation for Protected Mentions
     if (authorAdminLevel < 1) {
         const tagsOwner = message.mentions.users.has(message.guild.ownerId);
         const tagsProtected = message.mentions.users.some(u => PROTECTED_USERS.includes(u.id));
@@ -597,17 +589,22 @@ client.on('interactionCreate', async interaction => {
 
         if (interaction.commandName === 'send-panel') {
             if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
+            
             const verifyEmbed = new EmbedBuilder()
                 .setAuthor({ name: 'Royal Guard', iconURL: client.user.displayAvatarURL() })
                 .setTitle("BRITISH ARMY VERIFICATION SYSTEM V5")
-                .setDescription("Press the **Verify / Reverify** button to verify or reverify your ROBLOX account.")
+                .setDescription("Press the buttons below to verify your ROBLOX account or access our help desks.")
                 .setColor("#2F619E");
 
+            // EXACT MATCH: Rebuilding the 3-button green layout layout from your screen capture!
             const actionRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('panel_trigger_verify').setLabel('Verify / Reverify').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('btn_update_roles').setLabel('Update Roles').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId('panel_trigger_verify_login').setLabel('Verify via ROBLOX Login').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('panel_trigger_verify_ticket').setLabel('Verify via Verification Tickets').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('btn_update_roles').setLabel('Update Roles').setStyle(ButtonStyle.Success)
             );
-            return interaction.reply({ embeds: [verifyEmbed], components: [actionRow] });
+            
+            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Verification panel posted.").setColor('#2F619E')], ephemeral: true });
+            return interaction.channel.send({ embeds: [verifyEmbed], components: [actionRow] });
         }
 
         if (interaction.commandName === 'ticket') {
@@ -654,7 +651,7 @@ client.on('interactionCreate', async interaction => {
 
     else if (interaction.isButton()) {
         const cooldownKey = `${interaction.user.id}_ticket_cooldown`;
-        if (interaction.customId.startsWith('ticket_trigger_') || interaction.customId === 'panel_trigger_verify') {
+        if (interaction.customId.startsWith('ticket_trigger_') || interaction.customId.startsWith('panel_trigger_verify')) {
             if (cooldowns.has(cooldownKey)) {
                 const expirationTime = cooldowns.get(cooldownKey);
                 const timeLeft = Math.ceil((expirationTime - Date.now()) / 1000);
@@ -667,9 +664,8 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
-        if (interaction.customId === 'panel_trigger_verify') {
-            // FIX: Immediately defer reply publicly. This breaks Discord's 3-second limit 
-            // and eliminates the stuck "Please wait" or "Interaction failed" bug!
+        // Catching both verification buttons dynamically to deploy the anti-timeout fix
+        if (interaction.customId === 'panel_trigger_verify_ticket' || interaction.customId === 'panel_trigger_verify_login') {
             await interaction.deferReply();
 
             if (!serverConfig.ticketCategory) {
