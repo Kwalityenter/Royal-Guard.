@@ -79,7 +79,7 @@ function getAdminLevel(guild, member) {
     if (serverConfig.adminRoles) {
         for (const [roleId, level] of Object.entries(serverConfig.adminRoles)) {
             if (member.roles.cache.has(roleId)) {
-                highestLevel = Math.max(highestLevel, level);
+                highestLevel = Math.max(highestLevel, serverConfig.adminRoles[roleId]);
             }
         }
     }
@@ -284,12 +284,12 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
 
             const video1NotifyEmbed = new EmbedBuilder()
                 .setDescription(`Verification channel created. Please check ${ticketChannel} to verify your account.`)
-                .setColor('#8C1D1D');
+                .setColor('#2F619E');
 
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ embeds: [video1NotifyEmbed] });
             } else {
-                await interaction.reply({ embeds: [video1NotifyEmbed] });
+                await interaction.reply({ embeds: [video1NotifyEmbed], ephemeral: true });
             }
         } else {
             const cleanTitleLabel = selectionLabel.replace(/-/g, ' ').toUpperCase();
@@ -307,7 +307,7 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ embeds: [standardNotifyEmbed] });
             } else {
-                await interaction.reply({ embeds: [standardNotifyEmbed] });
+                await interaction.reply({ embeds: [standardNotifyEmbed], ephemeral: true });
             }
         }
 
@@ -596,7 +596,6 @@ client.on('interactionCreate', async interaction => {
                 .setDescription("Press the buttons below to verify your ROBLOX account or access our help desks.")
                 .setColor("#2F619E");
 
-            // EXACT MATCH: Rebuilding the 3-button green layout layout from your screen capture!
             const actionRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('panel_trigger_verify_login').setLabel('Verify via ROBLOX Login').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('panel_trigger_verify_ticket').setLabel('Verify via Verification Tickets').setStyle(ButtonStyle.Success),
@@ -664,9 +663,9 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
-        // Catching both verification buttons dynamically to deploy the anti-timeout fix
         if (interaction.customId === 'panel_trigger_verify_ticket' || interaction.customId === 'panel_trigger_verify_login') {
-            await interaction.deferReply();
+            // FIX APPLIED HERE: Added { ephemeral: true } to the initial deferReply method
+            await interaction.deferReply({ ephemeral: true });
 
             if (!serverConfig.ticketCategory) {
                 return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Ticket category not set.").setColor('#E67E22')] });
