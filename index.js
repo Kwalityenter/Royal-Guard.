@@ -668,12 +668,20 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (interaction.customId === 'panel_trigger_verify') {
-            if (!serverConfig.ticketCategory) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Ticket category not set.").setColor('#E67E22')], ephemeral: true });
+            // FIX: Immediately defer reply publicly. This breaks Discord's 3-second limit 
+            // and eliminates the stuck "Please wait" or "Interaction failed" bug!
+            await interaction.deferReply();
+
+            if (!serverConfig.ticketCategory) {
+                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Ticket category not set.").setColor('#E67E22')] });
+            }
 
             const channels = await interaction.guild.channels.fetch().catch(() => null);
             if (channels) {
                 const openCheck = channels.find(c => c && c.parentId === serverConfig.ticketCategory && c.type === ChannelType.GuildText && c.permissionOverwrites?.cache?.has(interaction.user.id));
-                if (openCheck) return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`You already have an open ticket: ${openCheck}`).setColor('#E67E22')], ephemeral: true });
+                if (openCheck) {
+                    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`You already have an open ticket: ${openCheck}`).setColor('#E67E22')] });
+                }
             }
 
             cooldowns.set(cooldownKey, Date.now() + 18000); 
