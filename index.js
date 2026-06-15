@@ -301,7 +301,7 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
             await ticketChannel.send({ content: `${interaction.user}`, embeds: [supportTicketEmbed] });
 
             const standardNotifyEmbed = new EmbedBuilder()
-                .setDescription(`Ticket generated: ${ticketChannel}`)
+                .setDescription(`Ticket channel created. Please check ${ticketChannel} to view your ticket.`)
                 .setColor('#2F619E');
 
             if (interaction.deferred || interaction.replied) {
@@ -441,7 +441,7 @@ client.on('messageCreate', async message => {
                 new EmbedBuilder()
                     .setTitle("Profile Verification")
                     .setDescription(`To verify you own this account, please copy the code below and paste it into your Roblox profile's **About** or **Description** section.`)
-                    .addFields({ name: "Code to Copy", value: `${code}`, inline: false })
+                    .addFields({ name: "Code to Copy", value: `\`${code}\``, inline: false })
                     .setFooter({ text: "Once you have saved your Roblox profile, type 'DONE' here." })
                     .setColor('#2F619E')
             ]});
@@ -610,23 +610,25 @@ client.on('interactionCreate', async interaction => {
             const subcommand = interaction.options.getSubcommand();
             if (subcommand === 'panel') {
                 if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
+                
+                // Matches reference exactly
                 const reportEmbed = new EmbedBuilder()
                     .setAuthor({ name: 'Royal Guard', iconURL: client.user.displayAvatarURL() })
                     .setTitle("REPORT TICKETS")
-                    .setDescription("Press the 📑 **Create Ticket** button for tickets to report an incident or other users.")
-                    .setColor("#E67E22");
+                    .setDescription("Press the 💥 Create Ticket button for tickets to report an incident or other users.")
+                    .setColor("#2F619E");
 
                 const otherEmbed = new EmbedBuilder()
                     .setAuthor({ name: 'Royal Guard', iconURL: client.user.displayAvatarURL() })
                     .setTitle("OTHER TICKETS")
-                    .setDescription("Press the 📑 **Create Ticket** button for tickets regarding other matters.")
+                    .setDescription("Press the 💥 Create Ticket button for tickets regarding other matters.")
                     .setColor("#2F619E");
 
                 const rowReport = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId('ticket_trigger_report').setLabel('Create Ticket').setStyle(ButtonStyle.Danger)
                 );
                 const rowOther = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('ticket_trigger_other').setLabel('Create Ticket').setStyle(ButtonStyle.Success)
+                    new ButtonBuilder().setCustomId('ticket_trigger_other').setLabel('Create Ticket').setStyle(ButtonStyle.Danger)
                 );
                 
                 await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Panels deployed.").setColor('#2F619E')], ephemeral: true });
@@ -656,7 +658,10 @@ client.on('interactionCreate', async interaction => {
                 const timeLeft = Math.ceil((expirationTime - Date.now()) / 1000);
                 if (timeLeft > 0) {
                     return interaction.reply({ 
-                        embeds: [new EmbedBuilder().setTitle("Warning - Cooldown").setDescription(`You're currently on a ${timeLeft}s cooldown!`).setColor('#E67E22')], 
+                        embeds: [new EmbedBuilder()
+                            .setTitle("Warning - Cooldown")
+                            .setDescription(`You're currently on a ${timeLeft}s cooldown for the Create Ticket button!`)
+                            .setColor('#E67E22')], 
                         ephemeral: true 
                     });
                 }
@@ -664,7 +669,6 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (interaction.customId === 'panel_trigger_verify_ticket' || interaction.customId === 'panel_trigger_verify_login') {
-            // FIX APPLIED HERE: Added { ephemeral: true } to the initial deferReply method
             await interaction.deferReply({ ephemeral: true });
 
             if (!serverConfig.ticketCategory) {
@@ -679,29 +683,38 @@ client.on('interactionCreate', async interaction => {
                 }
             }
 
-            cooldowns.set(cooldownKey, Date.now() + 18000); 
+            cooldowns.set(cooldownKey, Date.now() + 10000); 
             return await generateFinalTicket(interaction, "verify", "verification", serverConfig.ticketCategory);
         }
 
         if (interaction.customId === 'ticket_trigger_report' || interaction.customId === 'ticket_trigger_other') {
             const isReport = interaction.customId === 'ticket_trigger_report';
-            const dropEmbed = new EmbedBuilder().setTitle("Create Ticket").setDescription("Select what ticket you wish to create.").setColor("#2F619E");
-            const selectionMenu = new StringSelectMenuBuilder().setCustomId('menu_select_unified').setPlaceholder('Select Ticket Type...');
+            
+            // Set author object to user's identity precisely
+            const dropEmbed = new EmbedBuilder()
+                .setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
+                .setTitle("Create Ticket")
+                .setDescription("Please select what ticket you wish to create.")
+                .setColor("#2F619E");
+                
+            const selectionMenu = new StringSelectMenuBuilder()
+                .setCustomId('menu_select_unified')
+                .setPlaceholder('Select Ticket Type');
 
             if (isReport) {
                 selectionMenu.addOptions(
                     new StringSelectMenuOptionBuilder().setLabel('Report High Rank').setValue('report_high_rank').setDescription('Report a high ranking officer.'),
-                    new StringSelectMenuOptionBuilder().setLabel('Report Exploiter').setValue('report_exploiter').setDescription('Report an exploiter.'),
-                    new StringSelectMenuOptionBuilder().setLabel('Report Corruption').setValue('report_corruption').setDescription('Report corruption.'),
-                    new StringSelectMenuOptionBuilder().setLabel('Report Abuser').setValue('report_abuser').setDescription('Report an abuser.'),
-                    new StringSelectMenuOptionBuilder().setLabel('Report Rule Breaker').setValue('report_rule_breaker').setDescription('Report a rule breaker.')
+                    new StringSelectMenuOptionBuilder().setLabel('Report Exploiter').setValue('report_exploiter').setDescription('Report an exploiter in game to our moderation team'),
+                    new StringSelectMenuOptionBuilder().setLabel('Report Corruption').setValue('report_corruption').setDescription('Report a corrupted user'),
+                    new StringSelectMenuOptionBuilder().setLabel('Report Abuser').setValue('report_abuser').setDescription('Report an abuser'),
+                    new StringSelectMenuOptionBuilder().setLabel('Report Rule Breaker').setValue('report_rule_breaker').setDescription('Report a rule breaker')
                 );
             } else {
                 selectionMenu.addOptions(
-                    new StringSelectMenuOptionBuilder().setLabel('Report Bug / Glitch').setValue('other_bug_glitch').setDescription('Report a glitch or bug.'),
-                    new StringSelectMenuOptionBuilder().setLabel('Report Exploit Script').setValue('other_exploit_script').setDescription('Report an exploit script.'),
-                    new StringSelectMenuOptionBuilder().setLabel('Developer Application').setValue('other_developer_app').setDescription('Apply to become a developer.'),
-                    new StringSelectMenuOptionBuilder().setLabel('Alliance Application').setValue('other_alliance_app').setDescription('Apply to become an ally.')
+                    new StringSelectMenuOptionBuilder().setLabel('Report Bug / Glitch').setValue('other_bug_glitch').setDescription('Report an in game / discord glitch or bug to our developers'),
+                    new StringSelectMenuOptionBuilder().setLabel('Report Exploit Script').setValue('other_exploit_script').setDescription('Report an exploit script or vulnerability to our developers'),
+                    new StringSelectMenuOptionBuilder().setLabel('Developer Application').setValue('other_developer_app').setDescription('Apply to become a developer for British Army'),
+                    new StringSelectMenuOptionBuilder().setLabel('Alliance Application').setValue('other_alliance_app').setDescription('Apply to become an ally with the British Army')
                 );
             }
 
@@ -729,7 +742,7 @@ client.on('interactionCreate', async interaction => {
                 if (openCheck) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`You already have an open ticket: ${openCheck}`).setColor('#E67E22')] });
             }
 
-            cooldowns.set(`${interaction.user.id}_ticket_cooldown`, Date.now() + 18000);
+            cooldowns.set(`${interaction.user.id}_ticket_cooldown`, Date.now() + 10000);
             return await generateFinalTicket(interaction, cleanChannelPrefix, selectionLabel, serverConfig.ticketCategory);
         }
     }
