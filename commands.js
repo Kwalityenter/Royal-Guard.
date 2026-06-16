@@ -202,6 +202,17 @@ module.exports = [
         ]
     },
     {
+        name: 'bmt',
+        description: 'Manage the Basic Military Training (BMT) system',
+        options: [
+            {
+                type: 1, // SUB_COMMAND
+                name: 'panel',
+                description: 'Send the basic military training command panel'
+            }
+        ]
+    },
+    {
         name: 'update',
         description: 'Update your own roles based on your Roblox group status'
     }

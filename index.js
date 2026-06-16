@@ -40,11 +40,26 @@ if (!TOKEN) {
 //   HEADER & BRANDING CONFIGURATION BLOCK
 // ==========================================
 const EMBED_BRANDING = {
-    authorName: 'Royal Guard.',        // Your name/footer text
-    authorIcon: 'https://i.imgur.com/AtXr9n1.png', // Your logo image link (Must be a direct link)
-    groupName: 'DBA',              // Your Roblox Group Name
-    primaryColor: '#088de6',                // Color theme for successful/info embeds
-    errorColor: '#E67E22'                   // Color theme for errors/warnings
+    authorName: 'Royal Guard',        
+    authorIcon: 'https://i.imgur.com/AtXr9n1.png', 
+    groupName: 'DBA',              
+    primaryColor: '#0a93ee',                
+    errorColor: '#E67E22'                   
+};
+
+// ==========================================
+//   BASIC MILITARY TRAINING QUIZ CONFIG
+// ==========================================
+const BMT_CONFIG = {
+    targetRankValue: 2, // CHANGE THIS: The exact Roblox Group Rank Number for your "Private" rank
+    requiredCorrect: 4, // Amount of questions needed correct to pass
+    questions: [
+        { q: "Is advertising outside groups allowed in BA?", a: ["no"] },
+        { q: "Who is current Field Marshal of BA?", a: ["gutalidarsh"] },
+        { q: "Can you troll inside Belfast Garrison?", a: ["no"] },
+        { q: "Can you random kill people inside Belfast Garrison?", a: ["no"] },
+        { q: "Who is responsible for handling decorum inside Belfast Garrison?", a: ["royal military police", "rmp"] }
+    ]
 };
 
 let slashCommandsData = [];
@@ -71,6 +86,7 @@ function saveDB() {
 }
 
 const activeSessions = new Map();
+const bmtSessions = new Map(); // DM Session Manager map for BMT
 const cooldowns = new Map();
 
 const randomWords = ["apple", "banana", "robot", "blue", "army", "up", "down", "left", "right", "yes", "no", "green", "tiger", "shadow", "alpha", "delta", "verification", "cheese"];
@@ -204,10 +220,10 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
     
     if (!robloxUser) {
         const errEmbed = new EmbedBuilder().setDescription("Could not find your linked Roblox profile.").setColor(EMBED_BRANDING.errorColor);
-        if (interaction.editReply && (interaction.deferred || interaction.replied)) {
+        if (interaction && interaction.editReply && (interaction.deferred || interaction.replied)) {
             return interaction.editReply({ embeds: [errEmbed] });
         }
-        return interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : null;
+        return interaction && interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : null;
     }
 
     if (!db.globalVerifiedUsers) db.globalVerifiedUsers = {};
@@ -216,10 +232,10 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
 
     if (!serverConfig.groupId) {
         const errEmbed = new EmbedBuilder().setDescription("Group ID is not configured.").setColor(EMBED_BRANDING.errorColor);
-        if (interaction.editReply && (interaction.deferred || interaction.replied)) {
+        if (interaction && interaction.editReply && (interaction.deferred || interaction.replied)) {
             return interaction.editReply({ embeds: [errEmbed] });
         }
-        return interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : null;
+        return interaction && interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : null;
     }
 
     const rankValue = await getRobloxUserRank(robloxUser.id, serverConfig.groupId);
@@ -292,10 +308,10 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
         )
         .setColor(EMBED_BRANDING.primaryColor);
     
-    if (interaction.editReply && (interaction.deferred || interaction.replied)) {
+    if (interaction && interaction.editReply && (interaction.deferred || interaction.replied)) {
         return interaction.editReply({ embeds: [responseEmbed] });
     }
-    return interaction.channel ? interaction.channel.send({ embeds: [responseEmbed] }) : null;
+    return interaction && interaction.channel ? interaction.channel.send({ embeds: [responseEmbed] }) : null;
 }
 
 // ==========================================
@@ -386,7 +402,8 @@ const client = new Client({
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
         GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildModeration
+        GatewayIntentBits.GuildModeration,
+        GatewayIntentBits.DirectMessages
     ]
 });
 
@@ -402,7 +419,94 @@ client.once('ready', async () => {
 // TEXT MESSAGE INPUT FLOWS & COMMANDS
 // ==========================================
 client.on('messageCreate', async message => {
-    if (!message.guild || message.author.bot) return;
+    if (message.author.bot) return;
+
+    // --- DM ROUTER HANDLER FOR BMT QUIZ ---
+    if (!message.guild) {
+        if (bmtSessions.has(message.author.id)) {
+            const session = bmtSessions.get(message.author.id);
+            const currentQ = BMT_CONFIG.questions[session.step];
+            const answerClean = message.content.trim().toLowerCase();
+
+            if (currentQ.a.includes(answerClean)) {
+                session.score++;
+            }
+
+            session.step++;
+
+            if (session.step < BMT_CONFIG.questions.length) {
+                bmtSessions.set(message.author.id, session);
+                return message.reply({ embeds: [
+                    new EmbedBuilder()
+                        .setTitle(`Question ${session.step + 1} of ${BMT_CONFIG.questions.length}`)
+                        .setDescription(`**Question:** ${BMT_CONFIG.questions[session.step].q}`)
+                        .setColor(EMBED_BRANDING.primaryColor)
+                        .setFooter({ text: "Type your answer directly here in DMs." })
+                ]});
+            } else {
+                bmtSessions.delete(message.author.id);
+                const passed = session.score >= BMT_CONFIG.requiredCorrect;
+                
+                if (passed) {
+                    const targetGuild = client.guilds.cache.get(session.guildId);
+                    const targetMember = await targetGuild?.members.fetch(message.author.id).catch(() => null);
+                    const serverConfig = db[session.guildId];
+                    const robloxUserId = db.globalVerifiedUsers?.[message.author.id];
+
+                    try {
+                        let groupRoleName = "Private";
+                        if (serverConfig && robloxUserId) {
+                            groupRoleName = await changeRobloxRank(session.guildId, robloxUserId, BMT_CONFIG.targetRankValue);
+                            if (targetMember) {
+                                await executeUserUpdate(null, targetMember, serverConfig, robloxUserId);
+                            }
+                        }
+
+                        await message.reply({ embeds: [
+                            new EmbedBuilder()
+                                .setTitle("🎉 Basic Military Training Passed!")
+                                .setDescription(`Excellent job! You scored **${session.score}/${BMT_CONFIG.questions.length}**.\n\nYou have been automatically promoted to **${groupRoleName}** in the Roblox Group and your Discord roles are updated!`)
+                                .setColor(EMBED_BRANDING.primaryColor)
+                        ]});
+
+                        if (targetGuild) {
+                            const bmtLog = new EmbedBuilder()
+                                .setTitle("BMT Automated Pass")
+                                .setDescription(`User ${message.author} passed the automated BMT quiz with a score of **${session.score}/5** and was promoted to Private.`)
+                                .setColor(EMBED_BRANDING.primaryColor)
+                                .setTimestamp();
+                            await sendLog(targetGuild, 'moderation', bmtLog);
+                        }
+                    } catch (err) {
+                        await message.reply({ embeds: [
+                            new EmbedBuilder()
+                                .setTitle("⚠️ Promotion Error")
+                                .setDescription(`You passed with a score of **${session.score}/5**, but the bot hit a wall processing the Roblox API promotion:\n\`${err.message}\`\n\nPlease send a screenshot of this passing message to an officer to claim your rank.`)
+                                .setColor(EMBED_BRANDING.errorColor)
+                        ]});
+                    }
+                } else {
+                    await message.reply({ embeds: [
+                        new EmbedBuilder()
+                            .setTitle("❌ Basic Military Training Failed")
+                            .setDescription(`You scored **${session.score}/${BMT_CONFIG.questions.length}**. You need at least **${BMT_CONFIG.requiredCorrect}** correct answers to pass and receive a promotion.\n\nPlease study up and try again later!`)
+                            .setColor(EMBED_BRANDING.errorColor)
+                    ]});
+
+                    const targetGuild = client.guilds.cache.get(session.guildId);
+                    if (targetGuild) {
+                        const bmtFailLog = new EmbedBuilder()
+                            .setTitle("BMT Quiz Failed")
+                            .setDescription(`User ${message.author} failed the BMT quiz with a score of **${session.score}/5**.`)
+                            .setColor(EMBED_BRANDING.errorColor)
+                            .setTimestamp();
+                        await sendLog(targetGuild, 'moderation', bmtFailLog);
+                    }
+                }
+            }
+        }
+        return;
+    }
 
     const serverConfig = db[message.guild.id];
     if (!serverConfig) return;
@@ -795,6 +899,24 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
+        // --- NEW /BMT PANEL COMMAND ROUTER ---
+        if (interaction.commandName === 'bmt') {
+            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+            
+            const bmtPanelEmbed = new EmbedBuilder()
+                .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
+                .setTitle(`${EMBED_BRANDING.groupName} | BASIC MILITARY TRAINING`)
+                .setDescription("Welcome to the automated entry point for **Basic Military Training (BMT)**.\n\nClick the button below to start your training evaluation quiz directly via bot DMs. You must complete all questions safely to receive entry access.\n\n**Guidelines:**\n• You must score at least **4/5** points to pass.\n• Passing updates your group rank to **Private** automatically.")
+                .setColor(EMBED_BRANDING.primaryColor);
+
+            const bmtActionRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('btn_start_bmt').setLabel('Start BMT').setStyle(ButtonStyle.Primary)
+            );
+
+            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("BMT Panel has been posted.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
+            return interaction.channel.send({ embeds: [bmtPanelEmbed], components: [bmtActionRow] });
+        }
+
         if (interaction.commandName === 'update') {
             await interaction.deferReply({ ephemeral: true });
             return executeUserUpdate(interaction, member, serverConfig);
@@ -818,6 +940,30 @@ client.on('interactionCreate', async interaction => {
             
             setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
             return;
+        }
+
+        // --- START BMT INTERACTION BUTTON ---
+        if (interaction.customId === 'btn_start_bmt') {
+            if (!db.globalVerifiedUsers || !db.globalVerifiedUsers[interaction.user.id]) {
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("You must verify your Roblox account first before attempting the BMT evaluation!").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+            }
+
+            try {
+                bmtSessions.set(interaction.user.id, { step: 0, score: 0, guildId: guild.id });
+                
+                await interaction.user.send({ embeds: [
+                    new EmbedBuilder()
+                        .setTitle("📋 Basic Military Training Quiz")
+                        .setDescription(`Welcome! You have started the BMT evaluation. Please respond accurately.\n\n**Question 1:** ${BMT_CONFIG.questions[0].q}`)
+                        .setColor(EMBED_BRANDING.primaryColor)
+                        .setFooter({ text: "Type your answer directly here in DMs." })
+                ]});
+
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("The BMT verification evaluation has been sent directly to your DMs!").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
+            } catch (err) {
+                bmtSessions.delete(interaction.user.id);
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Failed to send you a DM. Please check that your privacy settings allow direct messages from server members!").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+            }
         }
 
         const cooldownKey = `${interaction.user.id}_ticket_cooldown`;
