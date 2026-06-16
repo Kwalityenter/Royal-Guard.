@@ -36,6 +36,17 @@ if (!TOKEN) {
     process.exit(1);
 }
 
+// ==========================================
+//   HEADER & BRANDING CONFIGURATION BLOCK
+// ==========================================
+const EMBED_BRANDING = {
+    authorName: 'Royal Guard.',        // Your name/footer text
+    authorIcon: 'https://i.imgur.com/AtXr9n1.png', // Your logo image link (Must be a direct link)
+    groupName: 'British Army',              // Your Roblox Group Name
+    primaryColor: '#38acf9',                // Color theme for successful/info embeds
+    errorColor: '#E67E22'                   // Color theme for errors/warnings
+};
+
 let slashCommandsData = [];
 const commandsPath = path.join(__dirname, 'commands.js');
 if (fs.existsSync(commandsPath)) {
@@ -192,7 +203,7 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
     }
     
     if (!robloxUser) {
-        const errEmbed = new EmbedBuilder().setDescription("Could not find your linked Roblox profile.").setColor('#E67E22');
+        const errEmbed = new EmbedBuilder().setDescription("Could not find your linked Roblox profile.").setColor(EMBED_BRANDING.errorColor);
         if (interaction.editReply && (interaction.deferred || interaction.replied)) {
             return interaction.editReply({ embeds: [errEmbed] });
         }
@@ -204,26 +215,11 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
     saveDB();
 
     if (!serverConfig.groupId) {
-        const errEmbed = new EmbedBuilder().setDescription("Group ID is not configured.").setColor('#E67E22');
+        const errEmbed = new EmbedBuilder().setDescription("Group ID is not configured.").setColor(EMBED_BRANDING.errorColor);
         if (interaction.editReply && (interaction.deferred || interaction.replied)) {
             return interaction.editReply({ embeds: [errEmbed] });
         }
         return interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : null;
-    }
-
-    // Auto-migrate legacy object configurations to RoWifi array format
-    if (serverConfig.binds && !Array.isArray(serverConfig.binds)) {
-        const legacyBinds = serverConfig.binds;
-        serverConfig.binds = [];
-        for (const [rk, data] of Object.entries(legacyBinds)) {
-            serverConfig.binds.push({
-                rank: parseInt(rk, 10),
-                compare: '==',
-                roleIds: data.roleIds || (data.roleId ? [data.roleId] : []),
-                prefix: data.prefix || null
-            });
-        }
-        saveDB();
     }
 
     const rankValue = await getRobloxUserRank(robloxUser.id, serverConfig.groupId);
@@ -235,7 +231,6 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
 
     if (serverConfig.binds && Array.isArray(serverConfig.binds)) {
         for (const bind of serverConfig.binds) {
-            // Track all roles managed by this system to ensure accurate cleaning operations
             if (bind.roleIds) bind.roleIds.forEach(id => allManagedRoles.add(id));
             if (bind.roleId) allManagedRoles.add(bind.roleId);
 
@@ -243,7 +238,6 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
             const comp = bind.compare || '==';
             const targetRank = parseInt(bind.rank, 10);
 
-            // Conditional operators
             if (comp === '==' && rankValue === targetRank) matches = true;
             else if (comp === '>=' && rankValue >= targetRank) matches = true;
             else if (comp === '<=' && rankValue <= targetRank) matches = true;
@@ -255,10 +249,9 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
                 if (bind.roleIds) bind.roleIds.forEach(id => targetRoleIds.add(id));
                 if (bind.roleId) targetRoleIds.add(bind.roleId);
                 
-                // Prioritize naming prefix based on rank assignment weight
-                if (bind.prefix && targetRank > highestPrefixWeight) {
+                if (bind.prefix && (comp === 'range' ? parseInt(bind.minRank, 10) : targetRank) > highestPrefixWeight) {
                     selectedPrefix = bind.prefix;
-                    highestPrefixWeight = targetRank;
+                    highestPrefixWeight = comp === 'range' ? parseInt(bind.minRank, 10) : targetRank;
                 }
             }
         }
@@ -274,7 +267,6 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
     let rolesAddedList = [];
     let rolesRemovedList = [];
 
-    // Add required matched roles
     for (const rId of targetRoleIds) {
         if (!member.roles.cache.has(rId)) {
             await member.roles.add(rId).catch(() => {});
@@ -282,7 +274,6 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
         }
     }
 
-    // Strip roles configured in the bind profile that the user no longer qualifies for
     for (const rId of allManagedRoles) {
         if (!targetRoleIds.has(rId) && member.roles.cache.has(rId)) {
             await member.roles.remove(rId).catch(() => {});
@@ -291,15 +282,15 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
     }
 
     const responseEmbed = new EmbedBuilder()
-        .setAuthor({ name: 'germanarmyholder.' })
-        .setTitle("BRITISH ARMY ROLES UPDATE SYSTEM")
-        .setDescription("Succesfully updated user roles")
+        .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
+        .setTitle(`${EMBED_BRANDING.groupName} ROLES UPDATE SYSTEM`)
+        .setDescription("Successfully updated user roles")
         .addFields(
             { name: "Nickname", value: finalNickname, inline: false },
             { name: "Roles Added", value: rolesAddedList.length > 0 ? rolesAddedList.map(r => `• ${r}`).join('\n') : "None", inline: false },
             { name: "Roles Removed", value: rolesRemovedList.length > 0 ? rolesRemovedList.map(r => `• ${r}`).join('\n') : "None", inline: false }
         )
-        .setColor('#5DADE2');
+        .setColor(EMBED_BRANDING.primaryColor);
     
     if (interaction.editReply && (interaction.deferred || interaction.replied)) {
         return interaction.editReply({ embeds: [responseEmbed] });
@@ -335,14 +326,14 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
                 .setTitle("Roblox Verification")
                 .setDescription(`Hello ${interaction.user},\n\nPlease type your **Roblox Username** below to start verification.\n\nType \`cancel\` or click the button below to close this channel.`)
                 .setFooter({ text: "Verification System | Step 1 of 3" })
-                .setColor('#5DADE2');
+                .setColor(EMBED_BRANDING.primaryColor);
 
             await ticketChannel.send({ embeds: [step1Embed], components: [closeTicketRow] });
             activeSessions.set(ticketChannel.id, { step: 1, userId: interaction.user.id, robloxId: null, robloxUsername: null, verificationCode: "" });
 
             const video1NotifyEmbed = new EmbedBuilder()
                 .setDescription(`Verification channel created. Please check ${ticketChannel} to verify your account.`)
-                .setColor('#5DADE2');
+                .setColor(EMBED_BRANDING.primaryColor);
 
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ embeds: [video1NotifyEmbed] });
@@ -354,13 +345,13 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
             const supportTicketEmbed = new EmbedBuilder()
                 .setTitle(`${cleanTitleLabel} TICKET`)
                 .setDescription(`Hello ${interaction.user},\n\nPlease describe your issue below details so staff can assist.\n\nType \`cancel\` or click the button below to close this channel.`)
-                .setColor('#5DADE2');
+                .setColor(EMBED_BRANDING.primaryColor);
 
             await ticketChannel.send({ content: `${interaction.user}`, embeds: [supportTicketEmbed], components: [closeTicketRow] });
 
             const standardNotifyEmbed = new EmbedBuilder()
                 .setDescription(`Ticket channel created. Please check ${ticketChannel} to view your ticket.`)
-                .setColor('#5DADE2');
+                .setColor(EMBED_BRANDING.primaryColor);
 
             if (interaction.deferred || interaction.replied) {
                 await interaction.editReply({ embeds: [standardNotifyEmbed] });
@@ -372,12 +363,12 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
         const ticketLog = new EmbedBuilder()
             .setTitle("Ticket Created")
             .setDescription(`Ticket **${selectionLabel}** opened by ${interaction.user} in ${ticketChannel}.`)
-            .setColor("#5DADE2")
+            .setColor(EMBED_BRANDING.primaryColor)
             .setTimestamp();
         await sendLog(interaction.guild, 'tickets', ticketLog);
 
     } catch (e) {
-        const errorMsg = { embeds: [new EmbedBuilder().setDescription("Failed creating ticket channel.").setColor('#E67E22')], ephemeral: true };
+        const errorMsg = { embeds: [new EmbedBuilder().setDescription("Failed creating ticket channel.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true };
         if (interaction.deferred || interaction.replied) {
             await interaction.editReply(errorMsg).catch(() => {});
         } else {
@@ -420,13 +411,13 @@ client.on('messageCreate', async message => {
 
     if (message.content.toLowerCase().startsWith('!verify')) {
         if (!serverConfig.ticketCategory) {
-            return message.reply({ embeds: [new EmbedBuilder().setDescription("Ticket category not configured.").setColor('#E67E22')] });
+            return message.reply({ embeds: [new EmbedBuilder().setDescription("Ticket category not configured.").setColor(EMBED_BRANDING.errorColor)] });
         }
         const channels = await message.guild.channels.fetch().catch(() => null);
         if (channels) {
             const openCheck = channels.find(c => c && c.parentId === serverConfig.ticketCategory && c.type === ChannelType.GuildText && c.permissionOverwrites?.cache?.has(message.author.id));
             if (openCheck) {
-                return message.reply({ embeds: [new EmbedBuilder().setDescription(`You already have an open verification ticket: ${openCheck}`).setColor('#E67E22')] });
+                return message.reply({ embeds: [new EmbedBuilder().setDescription(`You already have an open verification ticket: ${openCheck}`).setColor(EMBED_BRANDING.errorColor)] });
             }
         }
         
@@ -450,7 +441,7 @@ client.on('messageCreate', async message => {
         const input = message.content.trim();
 
         if (input.toLowerCase() === 'cancel') {
-            await message.reply({ embeds: [new EmbedBuilder().setDescription("Canceled. Closing channel...").setColor('#E67E22')] });
+            await message.reply({ embeds: [new EmbedBuilder().setDescription("Canceled. Closing channel...").setColor(EMBED_BRANDING.errorColor)] });
             activeSessions.delete(message.channel.id);
             setTimeout(() => message.channel.delete().catch(() => {}), 3000);
             return;
@@ -459,7 +450,7 @@ client.on('messageCreate', async message => {
         if (session.step === 1) {
             const robloxUser = await getRobloxUser(input);
             if (!robloxUser) {
-                return message.reply({ embeds: [new EmbedBuilder().setDescription("Roblox user not found. Try again or type `cancel`.").setColor('#E67E22')] });
+                return message.reply({ embeds: [new EmbedBuilder().setDescription("Roblox user not found. Try again or type `cancel`.").setColor(EMBED_BRANDING.errorColor)] });
             }
             session.robloxId = robloxUser.id;
             session.robloxUsername = robloxUser.username;
@@ -476,7 +467,7 @@ client.on('messageCreate', async message => {
                         { name: "Profile Link", value: `[View Profile](https://www.roblox.com/users/${robloxUser.id}/profile)`, inline: false }
                     )
                     .setFooter({ text: "Verification System | Step 2 of 3" })
-                    .setColor('#5DADE2')
+                    .setColor(EMBED_BRANDING.primaryColor)
             ]});
         }
 
@@ -484,10 +475,10 @@ client.on('messageCreate', async message => {
             if (input.toLowerCase() === 'no') {
                 session.step = 1;
                 activeSessions.set(message.channel.id, session);
-                return message.reply({ embeds: [new EmbedBuilder().setDescription("Type your correct Roblox Username below:").setColor('#5DADE2')] });
+                return message.reply({ embeds: [new EmbedBuilder().setDescription("Type your correct Roblox Username below:").setColor(EMBED_BRANDING.primaryColor)] });
             }
             if (input.toLowerCase() !== 'yes') {
-                return message.reply({ embeds: [new EmbedBuilder().setDescription("Invalid response. Type **YES** or **NO**.").setColor('#E67E22')] });
+                return message.reply({ embeds: [new EmbedBuilder().setDescription("Invalid response. Type **YES** or **NO**.").setColor(EMBED_BRANDING.errorColor)] });
             }
 
             const code = generateVerificationCode();
@@ -501,13 +492,13 @@ client.on('messageCreate', async message => {
                     .setDescription(`To verify you own this account, please copy the code below and paste it into your Roblox profile's **About** or **Description** section.`)
                     .addFields({ name: "Code to Copy", value: `\`${code}\``, inline: false })
                     .setFooter({ text: "Once you have saved your Roblox profile, type 'DONE' here." })
-                    .setColor('#5DADE2')
+                    .setColor(EMBED_BRANDING.primaryColor)
             ]});
         }
 
         if (session.step === 3) {
             if (input.toLowerCase() !== 'done') {
-                return message.reply({ embeds: [new EmbedBuilder().setDescription("Type `DONE` when you have updated your Roblox description.").setColor('#E67E22')] });
+                return message.reply({ embeds: [new EmbedBuilder().setDescription("Type `DONE` when you have updated your Roblox description.").setColor(EMBED_BRANDING.errorColor)] });
             }
 
             const liveUser = await getRobloxUserById(session.robloxId);
@@ -516,7 +507,7 @@ client.on('messageCreate', async message => {
                     embeds: [new EmbedBuilder()
                         .setTitle("Verification Failed")
                         .setDescription(`The code was not found in your Roblox description.\n\nExpected:\n\`${session.verificationCode}\``)
-                        .setColor('#E67E22')]
+                        .setColor(EMBED_BRANDING.errorColor)]
                 });
             }
 
@@ -527,7 +518,7 @@ client.on('messageCreate', async message => {
             const logEmbed = new EmbedBuilder()
                 .setTitle("User Verified")
                 .setDescription(`${message.author} linked to Roblox user **${session.robloxUsername}** (${session.robloxId}).`)
-                .setColor("#5DADE2")
+                .setColor(EMBED_BRANDING.primaryColor)
                 .setTimestamp();
             await sendLog(message.guild, 'verification', logEmbed);
 
@@ -547,7 +538,7 @@ client.on('messageCreate', async message => {
                 const modEmbed = new EmbedBuilder()
                     .setTitle("Automated Timeout")
                     .setDescription(`User ${message.author} timed out for 24 hours for mentioning protected users.`)
-                    .setColor("#E67E22")
+                    .setColor(EMBED_BRANDING.errorColor)
                     .setTimestamp();
                 await sendLog(message.guild, 'moderation', modEmbed);
                 return;
@@ -574,91 +565,105 @@ client.on('interactionCreate', async interaction => {
         
         if (interaction.commandName === 'set-cookie') {
             if (callerAdminLevel < 8) {
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Only the server owner can use this command.").setColor('#E67E22')], ephemeral: true });
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Only the server owner can use this command.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
             }
             serverConfig.robloxCookie = interaction.options.getString('cookie');
             saveDB();
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Successfully updated the cookie.").setColor('#5DADE2')], ephemeral: true });
+            return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Successfully updated the cookie.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
         }
 
         if (interaction.commandName === 'configure-group') {
-            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
+            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
             serverConfig.groupId = interaction.options.getInteger('group-id');
             saveDB();
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Bound to Group ID: **${serverConfig.groupId}**`).setColor('#5DADE2')] });
+            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Bound to Group ID: **${serverConfig.groupId}**`).setColor(EMBED_BRANDING.primaryColor)] });
         }
 
         if (interaction.commandName === 'set-log-channel') {
-            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
+            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
             const logType = interaction.options.getString('type');
             const targetChan = interaction.options.getChannel('channel');
             if (!serverConfig.logChannels) serverConfig.logChannels = {};
             serverConfig.logChannels[logType] = targetChan.id;
             saveDB();
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Logs for **${logType}** set to ${targetChan}`).setColor('#5DADE2')] });
+            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Logs for **${logType}** set to ${targetChan}`).setColor(EMBED_BRANDING.primaryColor)] });
         }
 
-        // ==========================================
-        // ROWIFI-STYLE SLASH BIND SYSTEM COMMANDS
-        // ==========================================
         if (interaction.commandName === 'bind') {
-            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
+            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
             
             const subcommand = interaction.options.getSubcommand();
             if (!serverConfig.binds || !Array.isArray(serverConfig.binds)) {
                 serverConfig.binds = [];
             }
 
-            if (subcommand === 'add') {
-                const role = interaction.options.getRole('role');
-                const compare = interaction.options.getString('comparison') || '==';
-                const rank = interaction.options.getInteger('rank-value');
+            if (subcommand === 'add' || subcommand === 'range') {
+                const rolesInput = interaction.options.getString('roles');
                 const prefix = interaction.options.getString('prefix') || null;
 
-                serverConfig.binds.push({
-                    roleIds: [role.id],
-                    compare: compare,
-                    rank: rank,
-                    prefix: prefix
-                });
-                saveDB();
+                const extractedIds = [...rolesInput.matchAll(/\d+/g)].map(match => match[0]);
+                const validRoleIds = extractedIds.filter(id => interaction.guild.roles.cache.has(id));
 
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Successfully bound: Users with rank **${compare} ${rank}** will receive ${role} (Prefix: \`${prefix || 'None'}\`).`).setColor('#5DADE2')] });
-            }
+                if (validRoleIds.length === 0) {
+                    return interaction.reply({ 
+                        embeds: [new EmbedBuilder().setDescription("No valid Discord roles or IDs found in your input.").setColor(EMBED_BRANDING.errorColor)], 
+                        ephemeral: true 
+                    });
+                }
 
-            if (subcommand === 'range') {
-                const role = interaction.options.getRole('role');
-                const minRank = interaction.options.getInteger('min-rank');
-                const maxRank = interaction.options.getInteger('max-rank');
-                const prefix = interaction.options.getString('prefix') || null;
+                if (subcommand === 'add') {
+                    const compare = interaction.options.getString('comparison') || '==';
+                    const rank = interaction.options.getInteger('rank-value');
 
-                serverConfig.binds.push({
-                    roleIds: [role.id],
-                    compare: 'range',
-                    minRank: minRank,
-                    maxRank: maxRank,
-                    prefix: prefix
-                });
-                saveDB();
+                    serverConfig.binds.push({
+                        roleIds: validRoleIds,
+                        compare: compare,
+                        rank: rank,
+                        prefix: prefix
+                    });
+                    saveDB();
 
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Successfully bound range: Users with ranks **${minRank} through ${maxRank}** will receive ${role} (Prefix: \`${prefix || 'None'}\`).`).setColor('#5DADE2')] });
+                    const rolesString = validRoleIds.map(id => `<@&${id}>`).join(', ');
+                    return interaction.reply({ 
+                        embeds: [new EmbedBuilder().setDescription(`Successfully bound: Users with rank **${compare} ${rank}** will receive: ${rolesString} (Prefix: \`${prefix || 'None'}\`).`).setColor(EMBED_BRANDING.primaryColor)] 
+                    });
+                }
+
+                if (subcommand === 'range') {
+                    const minRank = interaction.options.getInteger('min-rank');
+                    const maxRank = interaction.options.getInteger('max-rank');
+
+                    serverConfig.binds.push({
+                        roleIds: validRoleIds,
+                        compare: 'range',
+                        minRank: minRank,
+                        maxRank: maxRank,
+                        prefix: prefix
+                    });
+                    saveDB();
+
+                    const rolesString = validRoleIds.map(id => `<@&${id}>`).join(', ');
+                    return interaction.reply({ 
+                        embeds: [new EmbedBuilder().setDescription(`Successfully bound range: Users with ranks **${minRank} through ${maxRank}** will receive: ${rolesString} (Prefix: \`${prefix || 'None'}\`).`).setColor(EMBED_BRANDING.primaryColor)] 
+                    });
+                }
             }
 
             if (subcommand === 'clear') {
                 serverConfig.binds = [];
                 saveDB();
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Cleared all group rank binds.").setColor('#5DADE2')] });
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Cleared all group rank binds.").setColor(EMBED_BRANDING.primaryColor)] });
             }
 
             if (subcommand === 'list') {
                 if (!serverConfig.binds || serverConfig.binds.length === 0) {
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("No binds configured yet.").setColor('#E67E22')] });
+                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("No binds configured yet.").setColor(EMBED_BRANDING.errorColor)] });
                 }
 
                 const listEmbed = new EmbedBuilder()
-                    .setAuthor({ name: 'germanarmyholder.' })
-                    .setTitle("BRITISH ARMY ROLE BIND LIST")
-                    .setColor('#5DADE2');
+                    .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
+                    .setTitle(`${EMBED_BRANDING.groupName} ROLE BIND LIST`)
+                    .setColor(EMBED_BRANDING.primaryColor);
 
                 let descriptions = serverConfig.binds.map((b, i) => {
                     const rolesStr = b.roleIds ? b.roleIds.map(id => `<@&${id}>`).join(', ') : `<@&${b.roleId}>`;
@@ -675,13 +680,13 @@ client.on('interactionCreate', async interaction => {
 
         if (interaction.commandName === 'promote' || interaction.commandName === 'demote' || interaction.commandName === 'setrank') {
             if (callerAdminLevel < 2) {
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
             }
             await interaction.deferReply();
             
             const targetUserString = interaction.options.getString('username');
             const targetProfile = await getRobloxUser(targetUserString);
-            if (!targetProfile) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("User not found.").setColor('#E67E22')] });
+            if (!targetProfile) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("User not found.").setColor(EMBED_BRANDING.errorColor)] });
 
             const currentRank = await getRobloxUserRank(targetProfile.id, serverConfig.groupId);
             let finalRankTarget = currentRank;
@@ -691,7 +696,7 @@ client.on('interactionCreate', async interaction => {
             else finalRankTarget = interaction.options.getInteger('rank-value');
 
             if (finalRankTarget < 1 || finalRankTarget > 255) {
-                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Rank value out of range (1-255).").setColor('#E67E22')] });
+                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Rank value out of range (1-255).").setColor(EMBED_BRANDING.errorColor)] });
             }
 
             try {
@@ -704,7 +709,7 @@ client.on('interactionCreate', async interaction => {
                         { name: "Old Rank", value: String(currentRank), inline: true },
                         { name: "New Rank", value: `${finalRankTarget} (${assignedRoleName})`, inline: true }
                     )
-                    .setColor("#5DADE2")
+                    .setColor(EMBED_BRANDING.primaryColor)
                     .setTimestamp();
                 await sendLog(guild, 'moderation', rankLog);
 
@@ -714,20 +719,20 @@ client.on('interactionCreate', async interaction => {
                     if (foundMember) await executeUserUpdate(interaction, foundMember, serverConfig, targetProfile.id);
                 }
 
-                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Updated **${targetProfile.username}** to **${assignedRoleName}** (${finalRankTarget}).`).setColor('#5DADE2')] });
+                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Updated **${targetProfile.username}** to **${assignedRoleName}** (${finalRankTarget}).`).setColor(EMBED_BRANDING.primaryColor)] });
             } catch (err) {
-                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Error: ${err.message}`).setColor('#E67E22')] });
+                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Error: ${err.message}`).setColor(EMBED_BRANDING.errorColor)] });
             }
         }
 
         if (interaction.commandName === 'send-panel') {
-            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
+            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
             
             const verifyEmbed = new EmbedBuilder()
-                .setAuthor({ name: 'germanarmyholder.' })
-                .setTitle("BRITISH ARMY VERIFICATION SYSTEM V5")
+                .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
+                .setTitle(`${EMBED_BRANDING.groupName} VERIFICATION SYSTEM V5`)
                 .setDescription("Press the buttons below to verify your ROBLOX account or access our help desks.")
-                .setColor("#5DADE2");
+                .setColor(EMBED_BRANDING.primaryColor);
 
             const actionRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('panel_trigger_verify_login').setLabel('Verify via ROBLOX Login').setStyle(ButtonStyle.Success),
@@ -735,26 +740,26 @@ client.on('interactionCreate', async interaction => {
                 new ButtonBuilder().setCustomId('btn_update_roles').setLabel('Update Roles').setStyle(ButtonStyle.Success)
             );
             
-            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Verification panel posted.").setColor('#5DADE2')], ephemeral: true });
+            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Verification panel posted.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
             return interaction.channel.send({ embeds: [verifyEmbed], components: [actionRow] });
         }
 
         if (interaction.commandName === 'ticket') {
             const subcommand = interaction.options.getSubcommand();
             if (subcommand === 'panel') {
-                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
+                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
                 
                 const reportEmbed = new EmbedBuilder()
-                    .setAuthor({ name: 'germanarmyholder.' })
+                    .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
                     .setTitle("REPORT TICKETS")
                     .setDescription("Select an option from the dropdown menu below to report an incident or user.")
-                    .setColor("#5DADE2");
+                    .setColor(EMBED_BRANDING.primaryColor);
 
                 const otherEmbed = new EmbedBuilder()
-                    .setAuthor({ name: 'germanarmyholder.' })
+                    .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
                     .setTitle("OTHER TICKETS")
                     .setDescription("Select an option from the dropdown menu below for tickets regarding other matters.")
-                    .setColor("#5DADE2");
+                    .setColor(EMBED_BRANDING.primaryColor);
 
                 const menuReport = new StringSelectMenuBuilder()
                     .setCustomId('menu_ticket_report')
@@ -777,16 +782,16 @@ client.on('interactionCreate', async interaction => {
                         new StringSelectMenuOptionBuilder().setLabel('Alliance Application').setValue('other_alliance_app').setDescription('Apply to become an ally with the British Army')
                     );
                 
-                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Panels deployed.").setColor('#5DADE2')], ephemeral: true });
+                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Panels deployed.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
                 await interaction.channel.send({ embeds: [reportEmbed], components: [new ActionRowBuilder().addComponents(menuReport)] });
                 return await interaction.channel.send({ embeds: [otherEmbed], components: [new ActionRowBuilder().addComponents(menuOther)] });
             }
 
             if (subcommand === 'configure') {
-                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor('#E67E22')], ephemeral: true });
+                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
                 serverConfig.ticketCategory = interaction.options.getChannel('category').id;
                 saveDB();
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Ticket category configured.").setColor('#5DADE2')] });
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Ticket category configured.").setColor(EMBED_BRANDING.primaryColor)] });
             }
         }
 
@@ -798,7 +803,7 @@ client.on('interactionCreate', async interaction => {
 
     else if (interaction.isButton()) {
         if (interaction.customId === 'btn_close_ticket') {
-            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Closing ticket... Channel will be deleted in 3 seconds.").setColor('#E67E22')] });
+            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Closing ticket... Channel will be deleted in 3 seconds.").setColor(EMBED_BRANDING.errorColor)] });
             
             if (activeSessions.has(interaction.channel.id)) {
                 activeSessions.delete(interaction.channel.id);
@@ -807,7 +812,7 @@ client.on('interactionCreate', async interaction => {
             const closeLog = new EmbedBuilder()
                 .setTitle("Ticket Closed")
                 .setDescription(`Ticket channel **${interaction.channel.name}** was closed by ${interaction.user}.`)
-                .setColor("#E67E22")
+                .setColor(EMBED_BRANDING.errorColor)
                 .setTimestamp();
             await sendLog(guild, 'tickets', closeLog);
             
@@ -825,7 +830,7 @@ client.on('interactionCreate', async interaction => {
                         embeds: [new EmbedBuilder()
                             .setTitle("Warning - Cooldown")
                             .setDescription(`You're currently on a ${timeLeft}s cooldown for this verification process!`)
-                            .setColor('#E67E22')], 
+                            .setColor(EMBED_BRANDING.errorColor)], 
                         ephemeral: true 
                     });
                 }
@@ -836,14 +841,14 @@ client.on('interactionCreate', async interaction => {
             await interaction.deferReply({ ephemeral: true });
 
             if (!serverConfig.ticketCategory) {
-                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Ticket category not set.").setColor('#E67E22')] });
+                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Ticket category not set.").setColor(EMBED_BRANDING.errorColor)] });
             }
 
             const channels = await interaction.guild.channels.fetch().catch(() => null);
             if (channels) {
                 const openCheck = channels.find(c => c && c.parentId === serverConfig.ticketCategory && c.type === ChannelType.GuildText && c.permissionOverwrites?.cache?.has(interaction.user.id));
                 if (openCheck) {
-                    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`You already have an open ticket: ${openCheck}`).setColor('#E67E22')] });
+                    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`You already have an open ticket: ${openCheck}`).setColor(EMBED_BRANDING.errorColor)] });
                 }
             }
 
@@ -868,7 +873,7 @@ client.on('interactionCreate', async interaction => {
                         embeds: [new EmbedBuilder()
                             .setTitle("Warning - Cooldown")
                             .setDescription(`You're currently on a ${timeLeft}s cooldown for creating tickets!`)
-                            .setColor('#E67E22')], 
+                            .setColor(EMBED_BRANDING.errorColor)], 
                         ephemeral: true 
                     });
                 }
@@ -879,12 +884,12 @@ client.on('interactionCreate', async interaction => {
             let cleanChannelPrefix = selection.startsWith('report_') ? "report" : "other";
             let selectionLabel = selection.replace('report_', '').replace('other_', '').replace(/_/g, '-');
 
-            if (!serverConfig.ticketCategory) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Ticket category not set.").setColor('#E67E22')] });
+            if (!serverConfig.ticketCategory) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Ticket category not set.").setColor(EMBED_BRANDING.errorColor)] });
 
             const channels = await interaction.guild.channels.fetch().catch(() => null);
             if (channels) {
                 const openCheck = channels.find(c => c && c.parentId === serverConfig.ticketCategory && c.type === ChannelType.GuildText && c.permissionOverwrites?.cache?.has(interaction.user.id));
-                if (openCheck) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`You already have an open ticket: ${openCheck}`).setColor('#E67E22')] });
+                if (openCheck) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`You already have an open ticket: ${openCheck}`).setColor(EMBED_BRANDING.errorColor)] });
             }
 
             cooldowns.set(cooldownKey, Date.now() + 10000);

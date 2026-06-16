@@ -53,22 +53,22 @@ module.exports = [
             {
                 type: 1, // SUB_COMMAND
                 name: 'add',
-                description: 'Bind a specific rank condition to a Discord role',
+                description: 'Bind specific rank conditions to multiple Discord roles',
                 options: [
                     { 
-                        type: 8, 
-                        name: 'role', 
-                        description: 'The Discord role to assign', 
+                        type: 3, // STRING
+                        name: 'roles', 
+                        description: 'Mention the roles or paste IDs (separated by spaces)', 
                         required: true 
                     },
                     { 
-                        type: 4, 
+                        type: 4, // INTEGER
                         name: 'rank-value', 
                         description: 'The Roblox rank number (0-255)', 
                         required: true 
                     },
                     {
-                        type: 3,
+                        type: 3, // STRING
                         name: 'comparison',
                         description: 'How to evaluate the rank constraint',
                         required: false,
@@ -81,7 +81,7 @@ module.exports = [
                         ]
                     },
                     { 
-                        type: 3, 
+                        type: 3, // STRING
                         name: 'prefix', 
                         description: 'Optional group text prefix tag (e.g., Cpl)', 
                         required: false 
@@ -91,28 +91,28 @@ module.exports = [
             {
                 type: 1, // SUB_COMMAND
                 name: 'range',
-                description: 'Bind a range of ranks to a role',
+                description: 'Bind a range of ranks to multiple roles',
                 options: [
                     { 
-                        type: 8, 
-                        name: 'role', 
-                        description: 'The Discord role to assign', 
+                        type: 3, // STRING
+                        name: 'roles', 
+                        description: 'Mention the roles or paste IDs (separated by spaces)', 
                         required: true 
                     },
                     { 
-                        type: 4, 
+                        type: 4, // INTEGER
                         name: 'min-rank', 
                         description: 'Minimum group rank threshold boundary', 
                         required: true 
                     },
                     { 
-                        type: 4, 
+                        type: 4, // INTEGER
                         name: 'max-rank', 
                         description: 'Maximum group rank threshold boundary', 
                         required: true 
                     },
                     { 
-                        type: 3, 
+                        type: 3, // STRING
                         name: 'prefix', 
                         description: 'Optional group text prefix tag', 
                         required: false 
