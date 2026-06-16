@@ -42,8 +42,8 @@ if (!TOKEN) {
 const EMBED_BRANDING = {
     authorName: 'Royal Guard.',        // Your name/footer text
     authorIcon: 'https://i.imgur.com/AtXr9n1.png', // Your logo image link (Must be a direct link)
-    groupName: 'British Army',              // Your Roblox Group Name
-    primaryColor: '#38acf9',                // Color theme for successful/info embeds
+    groupName: 'DBA',              // Your Roblox Group Name
+    primaryColor: '#088de6',                // Color theme for successful/info embeds
     errorColor: '#E67E22'                   // Color theme for errors/warnings
 };
 
