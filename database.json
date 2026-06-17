@@ -16,5 +16,8 @@
     "security": {
       "antiPingEnabled": false
     }
-  }
+  },
+  "licensedGuilds": [
+    "1516695797083799643"
+  ]
 }
