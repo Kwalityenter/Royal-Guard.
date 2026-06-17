@@ -1,5 +1,17 @@
 module.exports = [
     {
+        name: 'add-license',
+        description: 'Authorize a Discord server to use this bot (Bot Owner Only)',
+        options: [
+            {
+                type: 3, // STRING
+                name: 'server-id',
+                description: 'The target Discord Server ID to license',
+                required: true
+            }
+        ]
+    },
+    {
         name: 'set-cookie',
         description: 'Set the Roblox .ROBLOSECURITY cookie (Server Owner Only)',
         options: [
@@ -48,7 +60,7 @@ module.exports = [
     },
     {
         name: 'bind',
-        description: 'Manage RoWifi-style group rank binds',
+        description: 'Manage group rank binds',
         options: [
             {
                 type: 1, // SUB_COMMAND
@@ -83,7 +95,7 @@ module.exports = [
                     { 
                         type: 3, // STRING
                         name: 'prefix', 
-                        description: 'Optional group text prefix tag (e.g., Cpl)', 
+                        description: 'Optional group text prefix tag', 
                         required: false 
                     }
                 ]

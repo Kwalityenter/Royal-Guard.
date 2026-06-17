@@ -31,28 +31,24 @@ const CLIENT_ID = process.env.CLIENT_ID || config.CLIENT_ID;
 const VERIFIED_ROLE_NAME = process.env.VERIFIED_ROLE_NAME || config.VERIFIED_ROLE_NAME || "Verified";
 const PROTECTED_USERS = config.QUARANTINE_PROTECTED_IDS || [];
 
+const OWNER_ID = "1151872484937834496"; // Change this to your Discord User ID
+
 if (!TOKEN) {
     console.error("Error: Bot token missing.");
     process.exit(1);
 }
 
-// ==========================================
-//   HEADER & BRANDING CONFIGURATION BLOCK
-// ==========================================
 const EMBED_BRANDING = {
     authorName: 'Royal Guard',        
-    authorIcon: 'https://i.imgur.com/AtXr9n1.png', 
-    groupName: 'DBA',              
-    primaryColor: '#0a93ee',                
+    authorIcon: 'https://i.imgur.com/FywBUxd.png', 
+    groupName: 'BRITISH ARMY',              
+    primaryColor: '#0a9afa',                
     errorColor: '#E67E22'                   
 };
 
-// ==========================================
-//   BASIC MILITARY TRAINING QUIZ CONFIG
-// ==========================================
 const BMT_CONFIG = {
-    targetRankValue: 2, // CHANGE THIS: The exact Roblox Group Rank Number for your "Private" rank
-    requiredCorrect: 4, // Amount of questions needed correct to pass
+    targetRankValue: 2, 
+    requiredCorrect: 4, 
     questions: [
         { q: "Is advertising outside groups allowed in BA?", a: ["no"] },
         { q: "Who is current Field Marshal of BA?", a: ["gutalidarsh"] },
@@ -73,20 +69,22 @@ if (fs.existsSync(commandsPath)) {
 const DB_FILE = './database.json';
 let db = {};
 if (!fs.existsSync(DB_FILE)) {
-    try { fs.writeFileSync(DB_FILE, JSON.stringify({}, null, 2), 'utf8'); } catch (e) {}
+    try { fs.writeFileSync(DB_FILE, JSON.stringify({ licensedGuilds: [] }, null, 2), 'utf8'); } catch (e) {}
 } else {
     try {
         const content = fs.readFileSync(DB_FILE, 'utf8').trim();
         db = content ? JSON.parse(content) : {};
-    } catch { db = {}; }
+    } catch { db = { licensedGuilds: [] }; }
 }
+
+if (!db.licensedGuilds) db.licensedGuilds = [];
 
 function saveDB() {
     try { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); } catch (e) {}
 }
 
 const activeSessions = new Map();
-const bmtSessions = new Map(); // DM Session Manager map for BMT
+const bmtSessions = new Map(); 
 const cooldowns = new Map();
 
 const randomWords = ["apple", "banana", "robot", "blue", "army", "up", "down", "left", "right", "yes", "no", "green", "tiger", "shadow", "alpha", "delta", "verification", "cheese"];
@@ -125,9 +123,6 @@ async function sendLog(guild, type, embed) {
     }
 }
 
-// ==========================================
-// ROBLOX INTEGRATION CORES
-// ==========================================
 async function getRobloxUser(username) {
     try {
         const res = await request('https://users.roblox.com/v1/usernames/users', {
@@ -203,9 +198,6 @@ async function changeRobloxRank(guildId, robloxUserId, targetRankValue) {
     return targetRole.name;
 }
 
-// ==========================================
-// ROWIFI-STYLE MULTI-BIND EXECUTION ENGINE
-// ==========================================
 async function executeUserUpdate(interaction, member, serverConfig, explicitUserId = null) {
     let robloxUser = null;
     if (explicitUserId) {
@@ -299,7 +291,7 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
 
     const responseEmbed = new EmbedBuilder()
         .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-        .setTitle(`${EMBED_BRANDING.groupName} ROLES UPDATE SYSTEM`)
+        .setTitle(`${EMBED_BRANDING.groupName} Roles Update System`)
         .setDescription("Successfully updated user roles")
         .addFields(
             { name: "Nickname", value: finalNickname, inline: false },
@@ -314,9 +306,6 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
     return interaction && interaction.channel ? interaction.channel.send({ embeds: [responseEmbed] }) : null;
 }
 
-// ==========================================
-// TICKET GENERATOR
-// ==========================================
 async function generateFinalTicket(interaction, channelPrefix, selectionLabel, categoryId) {
     try {
         const cleanUserSanitized = interaction.user.username.toLowerCase().replace(/[^a-z0-9_-]/g, '');
@@ -340,7 +329,7 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
         if (selectionLabel === 'verification') {
             const step1Embed = new EmbedBuilder()
                 .setTitle("Roblox Verification")
-                .setDescription(`Hello ${interaction.user},\n\nPlease type your **Roblox Username** below to start verification.\n\nType \`cancel\` or click the button below to close this channel.`)
+                .setDescription(`Hello ${interaction.user},\n\nPlease type your Roblox Username below to start verification.\n\nType \`cancel\` or click the button below to close this channel.`)
                 .setFooter({ text: "Verification System | Step 1 of 3" })
                 .setColor(EMBED_BRANDING.primaryColor);
 
@@ -348,7 +337,7 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
             activeSessions.set(ticketChannel.id, { step: 1, userId: interaction.user.id, robloxId: null, robloxUsername: null, verificationCode: "" });
 
             const video1NotifyEmbed = new EmbedBuilder()
-                .setDescription(`Verification channel created. Please check ${ticketChannel} to verify your account.`)
+                .setDescription(`Verification channel created: ${ticketChannel}`)
                 .setColor(EMBED_BRANDING.primaryColor);
 
             if (interaction.deferred || interaction.replied) {
@@ -359,14 +348,14 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
         } else {
             const cleanTitleLabel = selectionLabel.replace(/-/g, ' ').toUpperCase();
             const supportTicketEmbed = new EmbedBuilder()
-                .setTitle(`${cleanTitleLabel} TICKET`)
-                .setDescription(`Hello ${interaction.user},\n\nPlease describe your issue below details so staff can assist.\n\nType \`cancel\` or click the button below to close this channel.`)
+                .setTitle(`${cleanTitleLabel} Ticket`)
+                .setDescription(`Hello ${interaction.user},\n\nPlease describe your issue below so staff can assist.\n\nType \`cancel\` or click the button below to close this channel.`)
                 .setColor(EMBED_BRANDING.primaryColor);
 
             await ticketChannel.send({ content: `${interaction.user}`, embeds: [supportTicketEmbed], components: [closeTicketRow] });
 
             const standardNotifyEmbed = new EmbedBuilder()
-                .setDescription(`Ticket channel created. Please check ${ticketChannel} to view your ticket.`)
+                .setDescription(`Ticket channel created: ${ticketChannel}`)
                 .setColor(EMBED_BRANDING.primaryColor);
 
             if (interaction.deferred || interaction.replied) {
@@ -378,7 +367,7 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
 
         const ticketLog = new EmbedBuilder()
             .setTitle("Ticket Created")
-            .setDescription(`Ticket **${selectionLabel}** opened by ${interaction.user} in ${ticketChannel}.`)
+            .setDescription(`Ticket ${selectionLabel} opened by ${interaction.user} in ${ticketChannel}.`)
             .setColor(EMBED_BRANDING.primaryColor)
             .setTimestamp();
         await sendLog(interaction.guild, 'tickets', ticketLog);
@@ -393,9 +382,6 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
     }
 }
 
-// ==========================================
-// CLIENT BUILD
-// ==========================================
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -415,13 +401,20 @@ client.once('ready', async () => {
     } catch (e) {}
 });
 
-// ==========================================
-// TEXT MESSAGE INPUT FLOWS & COMMANDS
-// ==========================================
+client.on('guildCreate', async guild => {
+    if (!db.licensedGuilds.includes(guild.id)) {
+        console.log(`[SECURITY] Left unauthorized guild: ${guild.name} (${guild.id})`);
+        const systemChannel = guild.channels.cache.find(c => c.isTextBased() && c.permissionsFor(guild.members.me).has(PermissionFlagsBits.SendMessages));
+        if (systemChannel) {
+            await systemChannel.send("Access Denied: This server is not licensed to run this instance. Exiting...").catch(() => {});
+        }
+        await guild.leave().catch(() => {});
+    }
+});
+
 client.on('messageCreate', async message => {
     if (message.author.bot) return;
 
-    // --- DM ROUTER HANDLER FOR BMT QUIZ ---
     if (!message.guild) {
         if (bmtSessions.has(message.author.id)) {
             const session = bmtSessions.get(message.author.id);
@@ -464,15 +457,15 @@ client.on('messageCreate', async message => {
 
                         await message.reply({ embeds: [
                             new EmbedBuilder()
-                                .setTitle("🎉 Basic Military Training Passed!")
-                                .setDescription(`Excellent job! You scored **${session.score}/${BMT_CONFIG.questions.length}**.\n\nYou have been automatically promoted to **${groupRoleName}** in the Roblox Group and your Discord roles are updated!`)
+                                .setTitle("Basic Military Training Passed")
+                                .setDescription(`You scored ${session.score}/${BMT_CONFIG.questions.length}.\n\nYou have been promoted to ${groupRoleName} in the Roblox Group and your Discord roles are updated.`)
                                 .setColor(EMBED_BRANDING.primaryColor)
                         ]});
 
                         if (targetGuild) {
                             const bmtLog = new EmbedBuilder()
                                 .setTitle("BMT Automated Pass")
-                                .setDescription(`User ${message.author} passed the automated BMT quiz with a score of **${session.score}/5** and was promoted to Private.`)
+                                .setDescription(`User ${message.author} passed the automated BMT quiz with a score of ${session.score}/5 and was promoted to Private.`)
                                 .setColor(EMBED_BRANDING.primaryColor)
                                 .setTimestamp();
                             await sendLog(targetGuild, 'moderation', bmtLog);
@@ -480,16 +473,16 @@ client.on('messageCreate', async message => {
                     } catch (err) {
                         await message.reply({ embeds: [
                             new EmbedBuilder()
-                                .setTitle("⚠️ Promotion Error")
-                                .setDescription(`You passed with a score of **${session.score}/5**, but the bot hit a wall processing the Roblox API promotion:\n\`${err.message}\`\n\nPlease send a screenshot of this passing message to an officer to claim your rank.`)
+                                .setTitle("Promotion Error")
+                                .setDescription(`You passed with a score of ${session.score}/5, but the system encountered an error with the Roblox API promotion:\n\`${err.message}\`\n\nPlease submit a screenshot of this message to an officer for a manual promotion.`)
                                 .setColor(EMBED_BRANDING.errorColor)
                         ]});
                     }
                 } else {
                     await message.reply({ embeds: [
                         new EmbedBuilder()
-                            .setTitle("❌ Basic Military Training Failed")
-                            .setDescription(`You scored **${session.score}/${BMT_CONFIG.questions.length}**. You need at least **${BMT_CONFIG.requiredCorrect}** correct answers to pass and receive a promotion.\n\nPlease study up and try again later!`)
+                            .setTitle("Basic Military Training Failed")
+                            .setDescription(`You scored ${session.score}/${BMT_CONFIG.questions.length}. You need at least ${BMT_CONFIG.requiredCorrect} correct answers to pass and receive a promotion.`)
                             .setColor(EMBED_BRANDING.errorColor)
                     ]});
 
@@ -497,7 +490,7 @@ client.on('messageCreate', async message => {
                     if (targetGuild) {
                         const bmtFailLog = new EmbedBuilder()
                             .setTitle("BMT Quiz Failed")
-                            .setDescription(`User ${message.author} failed the BMT quiz with a score of **${session.score}/5**.`)
+                            .setDescription(`User ${message.author} failed the BMT quiz with a score of ${session.score}/5.`)
                             .setColor(EMBED_BRANDING.errorColor)
                             .setTimestamp();
                         await sendLog(targetGuild, 'moderation', bmtFailLog);
@@ -507,6 +500,8 @@ client.on('messageCreate', async message => {
         }
         return;
     }
+
+    if (!db.licensedGuilds.includes(message.guild.id)) return;
 
     const serverConfig = db[message.guild.id];
     if (!serverConfig) return;
@@ -564,7 +559,7 @@ client.on('messageCreate', async message => {
             return message.reply({ embeds: [
                 new EmbedBuilder()
                     .setTitle("Is this your account?")
-                    .setDescription(`Please confirm if this is your account. Reply with **YES** or **NO**.`)
+                    .setDescription(`Please confirm if this is your account. Reply with YES or NO.`)
                     .addFields(
                         { name: "Username", value: robloxUser.username, inline: true },
                         { name: "User ID", value: String(robloxUser.id), inline: true },
@@ -582,7 +577,7 @@ client.on('messageCreate', async message => {
                 return message.reply({ embeds: [new EmbedBuilder().setDescription("Type your correct Roblox Username below:").setColor(EMBED_BRANDING.primaryColor)] });
             }
             if (input.toLowerCase() !== 'yes') {
-                return message.reply({ embeds: [new EmbedBuilder().setDescription("Invalid response. Type **YES** or **NO**.").setColor(EMBED_BRANDING.errorColor)] });
+                return message.reply({ embeds: [new EmbedBuilder().setDescription("Invalid response. Type YES or NO.").setColor(EMBED_BRANDING.errorColor)] });
             }
 
             const code = generateVerificationCode();
@@ -593,7 +588,7 @@ client.on('messageCreate', async message => {
             return message.reply({ embeds: [
                 new EmbedBuilder()
                     .setTitle("Profile Verification")
-                    .setDescription(`To verify you own this account, please copy the code below and paste it into your Roblox profile's **About** or **Description** section.`)
+                    .setDescription(`To verify ownership, copy the code below and paste it into your Roblox profile Description section.`)
                     .addFields({ name: "Code to Copy", value: `\`${code}\``, inline: false })
                     .setFooter({ text: "Once you have saved your Roblox profile, type 'DONE' here." })
                     .setColor(EMBED_BRANDING.primaryColor)
@@ -651,13 +646,32 @@ client.on('messageCreate', async message => {
     }
 });
 
-// ==========================================
-// INTERACTION ROUTER HANDLER
-// ==========================================
 client.on('interactionCreate', async interaction => {
     const guild = interaction.guild;
     const member = interaction.member;
     if (!guild) return;
+
+    if (interaction.isChatInputCommand() && interaction.commandName === 'add-license') {
+        if (interaction.user.id !== OWNER_ID) {
+            return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Only the bot owner can use this command.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+        }
+        const targetServerId = interaction.options.getString('server-id');
+        if (!db.licensedGuilds.includes(targetServerId)) {
+            db.licensedGuilds.push(targetServerId);
+            saveDB();
+        }
+        return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Successfully generated license for Server ID: \`${targetServerId}\``).setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
+    }
+
+    if (!db.licensedGuilds.includes(guild.id)) {
+        return interaction.reply({ 
+            embeds: [new EmbedBuilder()
+                .setTitle("Unauthorized Guild")
+                .setDescription("This server does not hold an authorized operations license for this bot.")
+                .setColor(EMBED_BRANDING.errorColor)], 
+            ephemeral: true 
+        });
+    }
 
     if (!db[guild.id]) {
         db[guild.id] = { groupId: null, binds: [], adminUsers: {}, adminRoles: {}, ticketCategory: null, ticketCount: 0, robloxCookie: null, logChannels: {} };
@@ -766,7 +780,7 @@ client.on('interactionCreate', async interaction => {
 
                 const listEmbed = new EmbedBuilder()
                     .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                    .setTitle(`${EMBED_BRANDING.groupName} ROLE BIND LIST`)
+                    .setTitle(`${EMBED_BRANDING.groupName} Role Bind List`)
                     .setColor(EMBED_BRANDING.primaryColor);
 
                 let descriptions = serverConfig.binds.map((b, i) => {
@@ -834,13 +848,13 @@ client.on('interactionCreate', async interaction => {
             
             const verifyEmbed = new EmbedBuilder()
                 .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                .setTitle(`${EMBED_BRANDING.groupName} VERIFICATION SYSTEM V5`)
-                .setDescription("Press the buttons below to verify your ROBLOX account or access our help desks.")
+                .setTitle(`${EMBED_BRANDING.groupName} Verification System`)
+                .setDescription("Use the options below to verify your Roblox account or access help desks.")
                 .setColor(EMBED_BRANDING.primaryColor);
 
             const actionRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('panel_trigger_verify_login').setLabel('Verify via ROBLOX Login').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('panel_trigger_verify_ticket').setLabel('Verify via Verification Tickets').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('panel_trigger_verify_login').setLabel('Verify via Roblox Login').setStyle(ButtonStyle.Success),
+                new ButtonBuilder().setCustomId('panel_trigger_verify_ticket').setLabel('Verify via Tickets').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('btn_update_roles').setLabel('Update Roles').setStyle(ButtonStyle.Success)
             );
             
@@ -855,14 +869,14 @@ client.on('interactionCreate', async interaction => {
                 
                 const reportEmbed = new EmbedBuilder()
                     .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                    .setTitle("REPORT TICKETS")
-                    .setDescription("Select an option from the dropdown menu below to report an incident or user.")
+                    .setTitle("Report Tickets")
+                    .setDescription("Select an option from the dropdown menu to report an incident or user.")
                     .setColor(EMBED_BRANDING.primaryColor);
 
                 const otherEmbed = new EmbedBuilder()
                     .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                    .setTitle("OTHER TICKETS")
-                    .setDescription("Select an option from the dropdown menu below for tickets regarding other matters.")
+                    .setTitle("Other Tickets")
+                    .setDescription("Select an option from the dropdown menu for other matters.")
                     .setColor(EMBED_BRANDING.primaryColor);
 
                 const menuReport = new StringSelectMenuBuilder()
@@ -870,20 +884,20 @@ client.on('interactionCreate', async interaction => {
                     .setPlaceholder('Select Report Type')
                     .addOptions(
                         new StringSelectMenuOptionBuilder().setLabel('Report High Rank').setValue('report_high_rank').setDescription('Report a high ranking officer.'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Exploiter').setValue('report_exploiter').setDescription('Report an exploiter in game to our moderation team'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Corruption').setValue('report_corruption').setDescription('Report a corrupted user'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Abuser').setValue('report_abuser').setDescription('Report an abuser'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Rule Breaker').setValue('report_rule_breaker').setDescription('Report a rule breaker')
+                        new StringSelectMenuOptionBuilder().setLabel('Report Exploiter').setValue('report_exploiter').setDescription('Report an exploiter in game.'),
+                        new StringSelectMenuOptionBuilder().setLabel('Report Corruption').setValue('report_corruption').setDescription('Report a corrupted user.'),
+                        new StringSelectMenuOptionBuilder().setLabel('Report Abuser').setValue('report_abuser').setDescription('Report an abuser.'),
+                        new StringSelectMenuOptionBuilder().setLabel('Report Rule Breaker').setValue('report_rule_breaker').setDescription('Report a rule breaker.')
                     );
 
                 const menuOther = new StringSelectMenuBuilder()
                     .setCustomId('menu_ticket_other')
                     .setPlaceholder('Select Ticket Type')
                     .addOptions(
-                        new StringSelectMenuOptionBuilder().setLabel('Report Bug / Glitch').setValue('other_bug_glitch').setDescription('Report an in game / discord glitch or bug to our developers'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Exploit Script').setValue('other_exploit_script').setDescription('Report an exploit script or vulnerability to our developers'),
-                        new StringSelectMenuOptionBuilder().setLabel('Developer Application').setValue('other_developer_app').setDescription('Apply to become a developer for British Army'),
-                        new StringSelectMenuOptionBuilder().setLabel('Alliance Application').setValue('other_alliance_app').setDescription('Apply to become an ally with the British Army')
+                        new StringSelectMenuOptionBuilder().setLabel('Report Bug / Glitch').setValue('other_bug_glitch').setDescription('Report an in-game or discord glitch.'),
+                        new StringSelectMenuOptionBuilder().setLabel('Report Exploit Script').setValue('other_exploit_script').setDescription('Report an exploit script or vulnerability.'),
+                        new StringSelectMenuOptionBuilder().setLabel('Developer Application').setValue('other_developer_app').setDescription('Apply to become a developer.'),
+                        new StringSelectMenuOptionBuilder().setLabel('Alliance Application').setValue('other_alliance_app').setDescription('Apply for an alliance.')
                     );
                 
                 await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Panels deployed.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
@@ -899,21 +913,20 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
-        // --- NEW /BMT PANEL COMMAND ROUTER ---
         if (interaction.commandName === 'bmt') {
             if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Permission denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
             
             const bmtPanelEmbed = new EmbedBuilder()
                 .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                .setTitle(`${EMBED_BRANDING.groupName} | BASIC MILITARY TRAINING`)
-                .setDescription("Welcome to the automated entry point for **Basic Military Training (BMT)**.\n\nClick the button below to start your training evaluation quiz directly via bot DMs. You must complete all questions safely to receive entry access.\n\n**Guidelines:**\n• You must score at least **4/5** points to pass.\n• Passing updates your group rank to **Private** automatically.")
+                .setTitle(`${EMBED_BRANDING.groupName} | Basic Military Training`)
+                .setDescription("Welcome to the automated entry point for Basic Military Training (BMT).\n\nClick the button below to start your training evaluation quiz via bot DMs.\n\n**Guidelines:**\n• You must score at least 4/5 points to pass.\n• Passing updates your group rank to Private automatically.")
                 .setColor(EMBED_BRANDING.primaryColor);
 
             const bmtActionRow = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('btn_start_bmt').setLabel('Start BMT').setStyle(ButtonStyle.Primary)
             );
 
-            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("BMT Panel has been posted.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
+            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("BMT Panel posted.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
             return interaction.channel.send({ embeds: [bmtPanelEmbed], components: [bmtActionRow] });
         }
 
@@ -933,7 +946,7 @@ client.on('interactionCreate', async interaction => {
             
             const closeLog = new EmbedBuilder()
                 .setTitle("Ticket Closed")
-                .setDescription(`Ticket channel **${interaction.channel.name}** was closed by ${interaction.user}.`)
+                .setDescription(`Ticket channel ${interaction.channel.name} was closed by ${interaction.user}.`)
                 .setColor(EMBED_BRANDING.errorColor)
                 .setTimestamp();
             await sendLog(guild, 'tickets', closeLog);
@@ -942,10 +955,9 @@ client.on('interactionCreate', async interaction => {
             return;
         }
 
-        // --- START BMT INTERACTION BUTTON ---
         if (interaction.customId === 'btn_start_bmt') {
             if (!db.globalVerifiedUsers || !db.globalVerifiedUsers[interaction.user.id]) {
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("You must verify your Roblox account first before attempting the BMT evaluation!").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("You must verify your Roblox account first before attempting the BMT evaluation.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
             }
 
             try {
@@ -953,16 +965,16 @@ client.on('interactionCreate', async interaction => {
                 
                 await interaction.user.send({ embeds: [
                     new EmbedBuilder()
-                        .setTitle("📋 Basic Military Training Quiz")
-                        .setDescription(`Welcome! You have started the BMT evaluation. Please respond accurately.\n\n**Question 1:** ${BMT_CONFIG.questions[0].q}`)
+                        .setTitle("Basic Military Training Quiz")
+                        .setDescription(`Welcome to the BMT evaluation.\n\n**Question 1:** ${BMT_CONFIG.questions[0].q}`)
                         .setColor(EMBED_BRANDING.primaryColor)
                         .setFooter({ text: "Type your answer directly here in DMs." })
                 ]});
 
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("The BMT verification evaluation has been sent directly to your DMs!").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("The BMT quiz has been sent to your DMs.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
             } catch (err) {
                 bmtSessions.delete(interaction.user.id);
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Failed to send you a DM. Please check that your privacy settings allow direct messages from server members!").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Failed to send DM. Ensure your privacy settings allow direct messages from server members.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
             }
         }
 
@@ -974,8 +986,8 @@ client.on('interactionCreate', async interaction => {
                 if (timeLeft > 0) {
                     return interaction.reply({ 
                         embeds: [new EmbedBuilder()
-                            .setTitle("Warning - Cooldown")
-                            .setDescription(`You're currently on a ${timeLeft}s cooldown for this verification process!`)
+                            .setTitle("Cooldown")
+                            .setDescription(`Please wait ${timeLeft}s before running this process again.`)
                             .setColor(EMBED_BRANDING.errorColor)], 
                         ephemeral: true 
                     });
@@ -1017,8 +1029,8 @@ client.on('interactionCreate', async interaction => {
                 if (timeLeft > 0) {
                     return interaction.reply({ 
                         embeds: [new EmbedBuilder()
-                            .setTitle("Warning - Cooldown")
-                            .setDescription(`You're currently on a ${timeLeft}s cooldown for creating tickets!`)
+                            .setTitle("Cooldown")
+                            .setDescription(`Please wait ${timeLeft}s before creating a ticket.`)
                             .setColor(EMBED_BRANDING.errorColor)], 
                         ephemeral: true 
                     });
