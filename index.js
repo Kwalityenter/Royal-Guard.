@@ -47,7 +47,7 @@ const EMBED_BRANDING = {
 };
 
 const BMT_CONFIG = {
-    targetRankValue: 2, 
+    targetRankValue: 140, 
     requiredCorrect: 4, 
     questions: [
         { q: "Is advertising outside groups allowed in BA?", a: ["no"] },
