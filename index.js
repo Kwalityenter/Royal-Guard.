@@ -16,6 +16,15 @@ const {
 const { request } = require('undici');
 const fs = require('fs');
 const path = require('path');
+const http = require('http');
+
+// --- RAILWAY HEALTH CHECK SERVER ---
+http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Bot is online');
+}).listen(process.env.PORT || 3000, () => {
+    console.log(`Health check backend listening on port ${process.env.PORT || 3000}`);
+});
 
 const CONFIG_FILE = './config.json';
 let config = {};
@@ -30,7 +39,7 @@ const TOKEN = process.env.TOKEN || config.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID || config.CLIENT_ID;
 const VERIFIED_ROLE_NAME = process.env.VERIFIED_ROLE_NAME || config.VERIFIED_ROLE_NAME || "Verified";
 const PROTECTED_USERS = config.QUARANTINE_PROTECTED_IDS || [];
-const OWNER_ID = "YOUR_DISCORD_USER_ID"; 
+const OWNER_ID = "1151872484937834496"; // Change this to your numeric Discord ID
 
 if (!TOKEN) {
     console.error("Missing token.");
@@ -408,12 +417,9 @@ client.once('ready', async () => {
     } catch (e) {}
 });
 
+// --- RETAIN ON JOIN FLOW ---
 client.on('guildCreate', async guild => {
-    if (!db.licensedGuilds.includes(guild.id)) {
-        const systemChannel = guild.channels.cache.find(c => c.isTextBased() && c.permissionsFor(guild.members.me).has(PermissionFlagsBits.SendMessages));
-        if (systemChannel) await systemChannel.send("Server not licensed. Exiting...").catch(() => {});
-        await guild.leave().catch(() => {});
-    }
+    console.log(`Bot joined server: ${guild.name} (${guild.id})`);
 });
 
 client.on('messageCreate', async message => {
@@ -686,6 +692,7 @@ client.on('interactionCreate', async interaction => {
     const member = interaction.member;
     if (!guild) return;
 
+    // --- INTERCEPT LICENSE COMMAND FIRST ---
     if (interaction.isChatInputCommand() && interaction.commandName === 'add-license') {
         if (interaction.user.id !== OWNER_ID) {
             return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Owner command only.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
@@ -698,12 +705,14 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Licensed server: \`${targetServerId}\``).setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
     }
 
+    // --- BLOCK IF NOT LICENSED ---
     if (!db.licensedGuilds.includes(guild.id)) {
-        return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Unlicensed server instance.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+        return interaction.reply({ embeds: [new EmbedBuilder().setTitle("Unlicensed Instance").setDescription("This guild is not authorized to interface with this application.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
     }
 
     if (!db[guild.id]) {
         db[guild.id] = { groupId: null, binds: [], adminUsers: {}, adminRoles: {}, ticketCategory: null, ticketCount: 0, robloxCookie: null, logChannels: {} };
+        saveDB();
     }
     const serverConfig = db[guild.id];
     const callerAdminLevel = getAdminLevel(guild, member);
