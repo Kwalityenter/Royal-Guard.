@@ -686,6 +686,8 @@ client.on('interactionCreate', async interaction => {
     const member = interaction.member;
     if (!guild) return;
 
+    try {
+
     if (interaction.isChatInputCommand() && interaction.commandName === 'add-license') {
         if (interaction.user.id !== OWNER_ID) {
             return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Owner command only.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
@@ -709,14 +711,15 @@ client.on('interactionCreate', async interaction => {
     const callerAdminLevel = getAdminLevel(guild, member);
 
     if (interaction.isChatInputCommand()) {
-        
+
         if (interaction.commandName === 'set-cookie') {
             if (callerAdminLevel < 8) {
                 return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Server owner command only.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
             }
+            await interaction.deferReply({ ephemeral: true });
             serverConfig.robloxCookie = interaction.options.getString('cookie');
             saveDB();
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Cookie updated.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
+            return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Cookie updated.").setColor(EMBED_BRANDING.primaryColor)] });
         }
 
         if (interaction.commandName === 'configure-group') {
@@ -900,19 +903,22 @@ client.on('interactionCreate', async interaction => {
 
         if (interaction.commandName === 'bmt') {
             if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-            
-            const bmtPanelEmbed = new EmbedBuilder()
-                .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                .setTitle(`${EMBED_BRANDING.groupName} | Basic Training Entry`)
-                .setDescription("Click below to start your direct DM training quiz assessment. (Requires 4/5 score to pass).")
-                .setColor(EMBED_BRANDING.primaryColor);
 
-            const bmtActionRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('btn_start_bmt').setLabel('Start Evaluation').setStyle(ButtonStyle.Primary)
-            );
+            const bmtSubcommand = interaction.options.getSubcommand();
+            if (bmtSubcommand === 'panel') {
+                const bmtPanelEmbed = new EmbedBuilder()
+                    .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
+                    .setTitle(`${EMBED_BRANDING.groupName} | Basic Training Entry`)
+                    .setDescription("Click below to start your direct DM training quiz assessment. (Requires 4/5 score to pass).")
+                    .setColor(EMBED_BRANDING.primaryColor);
 
-            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("BMT terminal posted.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
-            return interaction.channel.send({ embeds: [bmtPanelEmbed], components: [bmtActionRow] });
+                const bmtActionRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('btn_start_bmt').setLabel('Start Evaluation').setStyle(ButtonStyle.Primary)
+                );
+
+                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("BMT terminal posted.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
+                return interaction.channel.send({ embeds: [bmtPanelEmbed], components: [bmtActionRow] });
+            }
         }
 
         if (interaction.commandName === 'update') {
@@ -1005,6 +1011,20 @@ client.on('interactionCreate', async interaction => {
             cooldowns.set(cooldownKey, Date.now() + 10000);
             return await generateFinalTicket(interaction, cleanChannelPrefix, selectionLabel, serverConfig.ticketCategory);
         }
+    }
+
+    } catch (err) {
+        console.error(`[interactionCreate] Unhandled error for command "${interaction.commandName || interaction.customId}":`, err);
+        const errEmbed = new EmbedBuilder()
+            .setDescription("An unexpected error occurred while processing your request.")
+            .setColor(EMBED_BRANDING.errorColor);
+        try {
+            if (interaction.deferred || interaction.replied) {
+                await interaction.editReply({ embeds: [errEmbed] });
+            } else {
+                await interaction.reply({ embeds: [errEmbed], ephemeral: true });
+            }
+        } catch (_) {}
     }
 });
 
