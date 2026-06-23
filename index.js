@@ -1,3 +1,45 @@
+// ========================================================================
+// 🛠️ THE ULTIMATE CUSTOMIZATION ZONE (CHANGE ANYTHING YOU WANT HERE!)
+// ========================================================================
+
+const OWNER_ID = "1151872484937834496"; // 👈 Paste your numeric Discord ID here!
+
+const EMBED_BRANDING = {
+    // Header & Author Settings
+    authorName: 'Royal Guard',                              // The small text at the very top of embeds
+    authorIcon: 'https://i.imgur.com/YourImageLink.png',     // The small circular image next to author name
+    groupName: 'BRITISH ARMY',                              // Your main group/game title
+    
+    // Main Embed Appearance
+    primaryColor: '#23a6f2',                                // Hex code for Panels/Success (Default: Deep Red)
+    errorColor: '#fc6b0b',                                  // Hex code for restriction/cooldown embeds (Default: Rust Orange)
+    
+    // Custom Titles (Change these to whatever headers you want!)
+    verificationTitle: 'BRITISH ARMY VERIFICATION SYSTEM V1.0',
+    rolesSystemTitle: 'Roles Successfully Updated',
+    bmtPanelTitle: 'Auto BMT System',
+    bgCheckTitle: 'Background Check',
+
+    // Footers
+    footerText: 'Made by Royal Guard Services, All rights reserved.'           // Text at the bottom of the embeds
+};
+
+const BMT_CONFIG = {
+    targetRankValue: 2, 
+    requiredCorrect: 4, 
+    questions: [
+        { q: "Is advertising outside groups allowed in BA?", a: ["no"] },
+        { q: "Who is current Field Marshal of BA?", a: ["gutalidarsh"] },
+        { q: "Can you troll inside Belfast Garrison?", a: ["no"] },
+        { q: "Can you random kill people inside Belfast Garrison?", a: ["no"] },
+        { q: "Who is responsible for handling decorum inside Belfast Garrison?", a: ["royal military police", "rmp"] }
+    ]
+};
+
+// ========================================================================
+// 🛑 END OF CUSTOMIZATION ZONE (DO NOT EDIT BELOW UNLESS YOU KNOW CODE)
+// ========================================================================
+
 const { 
     Client, 
     GatewayIntentBits, 
@@ -30,48 +72,23 @@ const CONFIG_FILE = './config.json';
 let config = {};
 
 if (fs.existsSync(CONFIG_FILE)) {
-    try {
-        config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
-    } catch (err) {}
+    try { config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch (err) {}
 }
 
 const TOKEN = process.env.TOKEN || config.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID || config.CLIENT_ID;
 const VERIFIED_ROLE_NAME = process.env.VERIFIED_ROLE_NAME || config.VERIFIED_ROLE_NAME || "Verified";
 const PROTECTED_USERS = config.QUARANTINE_PROTECTED_IDS || [];
-const OWNER_ID = "1151872484937834496"; // Change this to your numeric Discord ID
 
 if (!TOKEN) {
     console.error("Missing token.");
     process.exit(1);
 }
 
-const EMBED_BRANDING = {
-    authorName: 'germanarmyholder.',        
-    authorIcon: 'https://i.imgur.com/YourImageLink.png', 
-    groupName: 'BRITISH ARMY',              
-    primaryColor: '#5DADE2',                
-    errorColor: '#E67E22'                   
-};
-
-const BMT_CONFIG = {
-    targetRankValue: 2, 
-    requiredCorrect: 4, 
-    questions: [
-        { q: "Is advertising outside groups allowed in BA?", a: ["no"] },
-        { q: "Who is current Field Marshal of BA?", a: ["gutalidarsh"] },
-        { q: "Can you troll inside Belfast Garrison?", a: ["no"] },
-        { q: "Can you random kill people inside Belfast Garrison?", a: ["no"] },
-        { q: "Who is responsible for handling decorum inside Belfast Garrison?", a: ["royal military police", "rmp"] }
-    ]
-};
-
 let slashCommandsData = [];
 const commandsPath = path.join(__dirname, 'commands.js');
 if (fs.existsSync(commandsPath)) {
-    try {
-        slashCommandsData = require(commandsPath);
-    } catch (err) {}
+    try { slashCommandsData = require(commandsPath); } catch (err) {}
 }
 
 const DB_FILE = './database.json';
@@ -322,13 +339,14 @@ async function executeUserUpdate(interaction, member, serverConfig, explicitUser
 
     const responseEmbed = new EmbedBuilder()
         .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-        .setTitle(`${EMBED_BRANDING.groupName} Roles System`)
+        .setTitle(EMBED_BRANDING.rolesSystemTitle)
         .setDescription("Updated user configurations successfully.")
         .addFields(
             { name: "Nickname", value: finalNickname, inline: false },
             { name: "Roles Added", value: rolesAddedList.length > 0 ? rolesAddedList.map(r => `• ${r}`).join('\n') : "None", inline: false },
             { name: "Roles Removed", value: rolesRemovedList.length > 0 ? rolesRemovedList.map(r => `• ${r}`).join('\n') : "None", inline: false }
         )
+        .setFooter({ text: EMBED_BRANDING.footerText })
         .setColor(EMBED_BRANDING.primaryColor);
     
     if (interaction && interaction.editReply && (interaction.deferred || interaction.replied)) {
@@ -357,36 +375,21 @@ async function generateFinalTicket(interaction, channelPrefix, selectionLabel, c
                 .setStyle(ButtonStyle.Danger)
         );
 
-        if (selectionLabel === 'verification') {
-            const step1Embed = new EmbedBuilder()
-                .setTitle("Roblox Verification")
-                .setDescription(`Hello ${interaction.user},\n\nType your Roblox Username below.\n\nType \`cancel\` or click the button below to close this channel.`)
-                .setFooter({ text: "Step 1 of 3" })
-                .setColor(EMBED_BRANDING.primaryColor);
+        const cleanTitleLabel = selectionLabel.replace(/-/g, ' ').toUpperCase();
+        const supportTicketEmbed = new EmbedBuilder()
+            .setTitle(`${cleanTitleLabel} Ticket`)
+            .setDescription(`Hello ${interaction.user},\n\nPlease describe your issue below.\n\nType \`cancel\` or click the button below to close this channel.`)
+            .setColor(EMBED_BRANDING.primaryColor);
 
-            await ticketChannel.send({ embeds: [step1Embed], components: [closeTicketRow] });
-            activeSessions.set(ticketChannel.id, { step: 1, userId: interaction.user.id, robloxId: null, robloxUsername: null, verificationCode: "" });
+        await ticketChannel.send({ content: `${interaction.user}`, embeds: [supportTicketEmbed], components: [closeTicketRow] });
 
-            const notifyEmbed = new EmbedBuilder().setDescription(`Verification channel created: ${ticketChannel}`).setColor(EMBED_BRANDING.primaryColor);
-            if (interaction.deferred || interaction.replied) await interaction.editReply({ embeds: [notifyEmbed] });
-            else await interaction.reply({ embeds: [notifyEmbed], ephemeral: true });
-        } else {
-            const cleanTitleLabel = selectionLabel.replace(/-/g, ' ').toUpperCase();
-            const supportTicketEmbed = new EmbedBuilder()
-                .setTitle(`${cleanTitleLabel} Ticket`)
-                .setDescription(`Hello ${interaction.user},\n\nPlease describe your issue below.\n\nType \`cancel\` or click the button below to close this channel.`)
-                .setColor(EMBED_BRANDING.primaryColor);
-
-            await ticketChannel.send({ content: `${interaction.user}`, embeds: [supportTicketEmbed], components: [closeTicketRow] });
-
-            const standardNotifyEmbed = new EmbedBuilder().setDescription(`Ticket channel created: ${ticketChannel}`).setColor(EMBED_BRANDING.primaryColor);
-            if (interaction.deferred || interaction.replied) await interaction.editReply({ embeds: [standardNotifyEmbed] });
-            else await interaction.reply({ embeds: [standardNotifyEmbed], ephemeral: true });
-        }
+        const standardNotifyEmbed = new EmbedBuilder().setDescription(`Ticket channel created: ${ticketChannel}`).setColor(EMBED_BRANDING.primaryColor);
+        if (interaction.deferred || interaction.replied) await interaction.editReply({ embeds: [standardNotifyEmbed] });
+        else await interaction.reply({ embeds: [standardNotifyEmbed], ephemeral: true });
 
         const ticketLog = new EmbedBuilder()
             .setTitle("Ticket Created")
-            .setDescription(`Ticket ${selectionLabel} opened by ${interaction.user} in ${ticketChannel}.`)
+            .setDescription(`Ticket type **${selectionLabel}** opened by ${interaction.user} in ${ticketChannel}.`)
             .setColor(EMBED_BRANDING.primaryColor)
             .setTimestamp();
         await sendLog(interaction.guild, 'tickets', ticketLog);
@@ -415,11 +418,6 @@ client.once('ready', async () => {
         const restInstance = new REST({ version: '10' }).setToken(TOKEN);
         await restInstance.put(Routes.applicationCommands(CLIENT_ID), { body: slashCommandsData });
     } catch (e) {}
-});
-
-// --- RETAIN ON JOIN FLOW ---
-client.on('guildCreate', async guild => {
-    console.log(`Bot joined server: ${guild.name} (${guild.id})`);
 });
 
 client.on('messageCreate', async message => {
@@ -512,7 +510,6 @@ client.on('messageCreate', async message => {
     
     const authorAdminLevel = getAdminLevel(message.guild, message.member);
 
-    // --- !BGCHECK COMMAND ---
     if (message.content.toLowerCase().startsWith('!bgcheck')) {
         const args = message.content.split(' ');
         if (args.length < 2) {
@@ -538,13 +535,14 @@ client.on('messageCreate', async message => {
 
         const bgCheckEmbed = new EmbedBuilder()
             .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-            .setTitle(`Profile Check: ${profileData.username}`)
+            .setTitle(`${EMBED_BRANDING.bgCheckTitle}: ${profileData.username}`)
             .addFields(
                 { name: "User ID", value: String(profileData.id), inline: true },
                 { name: "Created", value: formattedDate, inline: true },
                 { name: "Past Usernames", value: pastNames, inline: false },
                 { name: "Group Status", value: groupStatus, inline: false }
             )
+            .setFooter({ text: EMBED_BRANDING.footerText })
             .setColor(EMBED_BRANDING.primaryColor)
             .setTimestamp();
 
@@ -688,332 +686,347 @@ client.on('messageCreate', async message => {
 });
 
 client.on('interactionCreate', async interaction => {
-    const guild = interaction.guild;
-    const member = interaction.member;
-    if (!guild) return;
+    try {
+        const guild = interaction.guild;
+        const member = interaction.member;
+        if (!guild) return;
 
-    // --- INTERCEPT LICENSE COMMAND FIRST ---
-    if (interaction.isChatInputCommand() && interaction.commandName === 'add-license') {
-        if (interaction.user.id !== OWNER_ID) {
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Owner command only.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-        }
-        const targetServerId = interaction.options.getString('server-id');
-        if (!db.licensedGuilds.includes(targetServerId)) {
-            db.licensedGuilds.push(targetServerId);
-            saveDB();
-        }
-        return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Licensed server: \`${targetServerId}\``).setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
-    }
-
-    // --- BLOCK IF NOT LICENSED ---
-    if (!db.licensedGuilds.includes(guild.id)) {
-        return interaction.reply({ embeds: [new EmbedBuilder().setTitle("Unlicensed Instance").setDescription("This guild is not authorized to interface with this application.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-    }
-
-    if (!db[guild.id]) {
-        db[guild.id] = { groupId: null, binds: [], adminUsers: {}, adminRoles: {}, ticketCategory: null, ticketCount: 0, robloxCookie: null, logChannels: {} };
-        saveDB();
-    }
-    const serverConfig = db[guild.id];
-    const callerAdminLevel = getAdminLevel(guild, member);
-
-    if (interaction.isChatInputCommand()) {
-        
-        if (interaction.commandName === 'set-cookie') {
-            if (callerAdminLevel < 8) {
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Server owner command only.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+        // --- INTERCEPT LICENSE COMMAND FIRST ---
+        if (interaction.isChatInputCommand() && interaction.commandName === 'add-license') {
+            if (interaction.user.id !== OWNER_ID) {
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Owner command only.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
             }
-            serverConfig.robloxCookie = interaction.options.getString('cookie');
-            saveDB();
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Cookie updated.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
-        }
-
-        if (interaction.commandName === 'configure-group') {
-            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-            serverConfig.groupId = interaction.options.getInteger('group-id');
-            saveDB();
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Group ID updated: **${serverConfig.groupId}**`).setColor(EMBED_BRANDING.primaryColor)] });
-        }
-
-        if (interaction.commandName === 'set-log-channel') {
-            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-            const logType = interaction.options.getString('type');
-            const targetChan = interaction.options.getChannel('channel');
-            if (!serverConfig.logChannels) serverConfig.logChannels = {};
-            serverConfig.logChannels[logType] = targetChan.id;
-            saveDB();
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Logs for **${logType}** redirected to ${targetChan}`).setColor(EMBED_BRANDING.primaryColor)] });
-        }
-
-        if (interaction.commandName === 'bind') {
-            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-            
-            const subcommand = interaction.options.getSubcommand();
-            if (!serverConfig.binds || !Array.isArray(serverConfig.binds)) serverConfig.binds = [];
-
-            if (subcommand === 'add' || subcommand === 'range') {
-                const rolesInput = interaction.options.getString('roles');
-                const prefix = interaction.options.getString('prefix') || null;
-
-                const extractedIds = [...rolesInput.matchAll(/\d+/g)].map(match => match[0]);
-                const validRoleIds = extractedIds.filter(id => interaction.guild.roles.cache.has(id));
-
-                if (validRoleIds.length === 0) {
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("No valid roles provided.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                }
-
-                if (subcommand === 'add') {
-                    const compare = interaction.options.getString('comparison') || '==';
-                    const rank = interaction.options.getInteger('rank-value');
-
-                    serverConfig.binds.push({ roleIds: validRoleIds, compare: compare, rank: rank, prefix: prefix });
-                    saveDB();
-
-                    const rolesString = validRoleIds.map(id => `<@&${id}>`).join(', ');
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Bound rank **${compare} ${rank}** to: ${rolesString}`).setColor(EMBED_BRANDING.primaryColor)] });
-                }
-
-                if (subcommand === 'range') {
-                    const minRank = interaction.options.getInteger('min-rank');
-                    const maxRank = interaction.options.getInteger('max-rank');
-
-                    serverConfig.binds.push({ roleIds: validRoleIds, compare: 'range', minRank: minRank, maxRank: maxRank, prefix: prefix });
-                    saveDB();
-
-                    const rolesString = validRoleIds.map(id => `<@&${id}>`).join(', ');
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Bound range **${minRank}-${maxRank}** to: ${rolesString}`).setColor(EMBED_BRANDING.primaryColor)] });
-                }
-            }
-
-            if (subcommand === 'clear') {
-                serverConfig.binds = [];
+            const targetServerId = interaction.options.getString('server-id');
+            if (!db.licensedGuilds.includes(targetServerId)) {
+                db.licensedGuilds.push(targetServerId);
                 saveDB();
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Cleared all active binds.").setColor(EMBED_BRANDING.primaryColor)] });
             }
+            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Licensed server: \`${targetServerId}\``).setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
+        }
 
-            if (subcommand === 'list') {
-                if (!serverConfig.binds || serverConfig.binds.length === 0) {
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("No active binds.").setColor(EMBED_BRANDING.errorColor)] });
+        // --- BLOCK IF NOT LICENSED ---
+        if (!db.licensedGuilds.includes(guild.id)) {
+            return interaction.reply({ embeds: [new EmbedBuilder().setTitle("Unlicensed Instance").setDescription("This guild is not authorized to interface with this application.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+        }
+
+        if (!db[guild.id]) {
+            db[guild.id] = { groupId: null, binds: [], adminUsers: {}, adminRoles: {}, ticketCategory: null, ticketCount: 0, robloxCookie: null, logChannels: {} };
+            saveDB();
+        }
+        const serverConfig = db[guild.id];
+        const callerAdminLevel = getAdminLevel(guild, member);
+
+        if (interaction.isChatInputCommand()) {
+            
+            if (interaction.commandName === 'set-cookie') {
+                if (callerAdminLevel < 8) {
+                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Server owner command only.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
                 }
-
-                const listEmbed = new EmbedBuilder()
-                    .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                    .setTitle("Active Bind configurations")
-                    .setColor(EMBED_BRANDING.primaryColor);
-
-                let descriptions = serverConfig.binds.map((b, i) => {
-                    const rolesStr = b.roleIds ? b.roleIds.map(id => `<@&${id}>`).join(', ') : `<@&${b.roleId}>`;
-                    if (b.compare === 'range') return `**${i + 1}.** Rank \`[${b.minRank}-${b.maxRank}]\` ➔ ${rolesStr}`;
-                    return `**${i + 1}.** Rank \`${b.compare} ${b.rank}\` ➔ ${rolesStr}`;
-                });
-
-                listEmbed.setDescription(descriptions.join('\n'));
-                return interaction.reply({ embeds: [listEmbed] });
-            }
-        }
-
-        if (interaction.commandName === 'promote' || interaction.commandName === 'demote' || interaction.commandName === 'setrank') {
-            if (callerAdminLevel < 2) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-            await interaction.deferReply();
-            
-            const targetUserString = interaction.options.getString('username');
-            const targetProfile = await getRobloxUser(targetUserString);
-            if (!targetProfile) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("User not found.").setColor(EMBED_BRANDING.errorColor)] });
-
-            const currentRank = await getRobloxUserRank(targetProfile.id, serverConfig.groupId);
-            let finalRankTarget = currentRank;
-
-            if (interaction.commandName === 'promote') finalRankTarget = currentRank + 1;
-            else if (interaction.commandName === 'demote') finalRankTarget = currentRank - 1;
-            else finalRankTarget = interaction.options.getInteger('rank-value');
-
-            if (finalRankTarget < 1 || finalRankTarget > 255) {
-                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Value range is 1-255.").setColor(EMBED_BRANDING.errorColor)] });
+                serverConfig.robloxCookie = interaction.options.getString('cookie');
+                saveDB();
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Cookie updated.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
             }
 
-            try {
-                const assignedRoleName = await changeRobloxRank(guild.id, targetProfile.id, finalRankTarget);
-                
-                const rankLog = new EmbedBuilder()
-                    .setTitle(`Admin Rank Modification`)
-                    .setDescription(`Target: **${targetProfile.username}** updated by ${interaction.user}.`)
-                    .addFields(
-                        { name: "Old", value: String(currentRank), inline: true },
-                        { name: "New", value: `${finalRankTarget} (${assignedRoleName})`, inline: true }
-                    )
-                    .setColor(EMBED_BRANDING.primaryColor);
-                await sendLog(guild, 'moderation', rankLog);
-
-                const matchedDiscordUser = Object.keys(db.globalVerifiedUsers || {}).find(key => db.globalVerifiedUsers[key] === targetProfile.id);
-                if (matchedDiscordUser) {
-                    const foundMember = await guild.members.fetch(matchedDiscordUser).catch(() => null);
-                    if (foundMember) await executeUserUpdate(interaction, foundMember, serverConfig, targetProfile.id);
-                }
-
-                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Updated **${targetProfile.username}** to rank: **${assignedRoleName}**`).setColor(EMBED_BRANDING.primaryColor)] });
-            } catch (err) {
-                return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Error: ${err.message}`).setColor(EMBED_BRANDING.errorColor)] });
+            if (interaction.commandName === 'configure-group') {
+                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+                serverConfig.groupId = interaction.options.getInteger('group-id');
+                saveDB();
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Group ID updated: **${serverConfig.groupId}**`).setColor(EMBED_BRANDING.primaryColor)] });
             }
-        }
 
-        if (interaction.commandName === 'send-panel') {
-            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-            
-            const verifyEmbed = new EmbedBuilder()
-                .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                .setTitle(`${EMBED_BRANDING.groupName} Verification Portal`)
-                .setDescription("Select a method below to synchronize or link your profile.")
-                .setColor(EMBED_BRANDING.primaryColor);
+            if (interaction.commandName === 'set-log-channel') {
+                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+                const logType = interaction.options.getString('type');
+                const targetChan = interaction.options.getChannel('channel');
+                if (!serverConfig.logChannels) serverConfig.logChannels = {};
+                serverConfig.logChannels[logType] = targetChan.id;
+                saveDB();
+                return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Logs for **${logType}** redirected to ${targetChan}`).setColor(EMBED_BRANDING.primaryColor)] });
+            }
 
-            const actionRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('panel_trigger_verify_login').setLabel('Verify Account').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('panel_trigger_verify_ticket').setLabel('Support Ticket').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('btn_update_roles').setLabel('Sync Roles').setStyle(ButtonStyle.Success)
-            );
-            
-            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Portal interface posted.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
-            return interaction.channel.send({ embeds: [verifyEmbed], components: [actionRow] });
-        }
-
-        if (interaction.commandName === 'ticket') {
-            const subcommand = interaction.options.getSubcommand();
-            if (subcommand === 'panel') {
+            if (interaction.commandName === 'bind') {
                 if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
                 
+                const subcommand = interaction.options.getSubcommand();
+                if (!serverConfig.binds || !Array.isArray(serverConfig.binds)) serverConfig.binds = [];
+
+                if (subcommand === 'add' || subcommand === 'range') {
+                    const rolesInput = interaction.options.getString('roles');
+                    const prefix = interaction.options.getString('prefix') || null;
+
+                    const extractedIds = [...rolesInput.matchAll(/\d+/g)].map(match => match[0]);
+                    const validRoleIds = extractedIds.filter(id => interaction.guild.roles.cache.has(id));
+
+                    if (validRoleIds.length === 0) {
+                        return interaction.reply({ embeds: [new EmbedBuilder().setDescription("No valid roles provided.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+                    }
+
+                    if (subcommand === 'add') {
+                        const compare = interaction.options.getString('comparison') || '==';
+                        const rank = interaction.options.getInteger('rank-value');
+
+                        serverConfig.binds.push({ roleIds: validRoleIds, compare: compare, rank: rank, prefix: prefix });
+                        saveDB();
+
+                        const rolesString = validRoleIds.map(id => `<@&${id}>`).join(', ');
+                        return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Bound rank **${compare} ${rank}** to: ${rolesString}`).setColor(EMBED_BRANDING.primaryColor)] });
+                    }
+
+                    if (subcommand === 'range') {
+                        const minRank = interaction.options.getInteger('min-rank');
+                        const maxRank = interaction.options.getInteger('max-rank');
+
+                        serverConfig.binds.push({ roleIds: validRoleIds, compare: 'range', minRank: minRank, maxRank: maxRank, prefix: prefix });
+                        saveDB();
+
+                        const rolesString = validRoleIds.map(id => `<@&${id}>`).join(', ');
+                        return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Bound range **${minRank}-${maxRank}** to: ${rolesString}`).setColor(EMBED_BRANDING.primaryColor)] });
+                    }
+                }
+
+                if (subcommand === 'clear') {
+                    serverConfig.binds = [];
+                    saveDB();
+                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Cleared all active binds.").setColor(EMBED_BRANDING.primaryColor)] });
+                }
+
+                if (subcommand === 'list') {
+                    if (!serverConfig.binds || serverConfig.binds.length === 0) {
+                        return interaction.reply({ embeds: [new EmbedBuilder().setDescription("No active binds.").setColor(EMBED_BRANDING.errorColor)] });
+                    }
+
+                    const listEmbed = new EmbedBuilder()
+                        .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
+                        .setTitle("Active Bind configurations")
+                        .setColor(EMBED_BRANDING.primaryColor);
+
+                    let descriptions = serverConfig.binds.map((b, i) => {
+                        const rolesStr = b.roleIds ? b.roleIds.map(id => `<@&${id}>`).join(', ') : `<@&${b.roleId}>`;
+                        if (b.compare === 'range') return `**${i + 1}.** Rank \`[${b.minRank}-${b.maxRank}]\` ➔ ${rolesStr}`;
+                        return `**${i + 1}.** Rank \`${b.compare} ${b.rank}\` ➔ ${rolesStr}`;
+                    });
+
+                    listEmbed.setDescription(descriptions.join('\n'));
+                    return interaction.reply({ embeds: [listEmbed] });
+                }
+            }
+
+            if (interaction.commandName === 'promote' || interaction.commandName === 'demote' || interaction.commandName === 'setrank') {
+                if (callerAdminLevel < 2) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+                await interaction.deferReply();
+                
+                const targetUserString = interaction.options.getString('username');
+                const targetProfile = await getRobloxUser(targetUserString);
+                if (!targetProfile) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("User not found.").setColor(EMBED_BRANDING.errorColor)] });
+
+                const currentRank = await getRobloxUserRank(targetProfile.id, serverConfig.groupId);
+                let finalRankTarget = currentRank;
+
+                if (interaction.commandName === 'promote') finalRankTarget = currentRank + 1;
+                else if (interaction.commandName === 'demote') finalRankTarget = currentRank - 1;
+                else finalRankTarget = interaction.options.getInteger('rank-value');
+
+                if (finalRankTarget < 1 || finalRankTarget > 255) {
+                    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Value range is 1-255.").setColor(EMBED_BRANDING.errorColor)] });
+                }
+
+                try {
+                    const assignedRoleName = await changeRobloxRank(guild.id, targetProfile.id, finalRankTarget);
+                    
+                    const rankLog = new EmbedBuilder()
+                        .setTitle(`Admin Rank Modification`)
+                        .setDescription(`Target: **${targetProfile.username}** updated by ${interaction.user}.`)
+                        .addFields(
+                            { name: "Old", value: String(currentRank), inline: true },
+                            { name: "New", value: `${finalRankTarget} (${assignedRoleName})`, inline: true }
+                        )
+                        .setColor(EMBED_BRANDING.primaryColor);
+                    await sendLog(guild, 'moderation', rankLog);
+
+                    const matchedDiscordUser = Object.keys(db.globalVerifiedUsers || {}).find(key => db.globalVerifiedUsers[key] === targetProfile.id);
+                    if (matchedDiscordUser) {
+                        const foundMember = await guild.members.fetch(matchedDiscordUser).catch(() => null);
+                        if (foundMember) await executeUserUpdate(interaction, foundMember, serverConfig, targetProfile.id);
+                    }
+
+                    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Updated **${targetProfile.username}** to rank: **${assignedRoleName}**`).setColor(EMBED_BRANDING.primaryColor)] });
+                } catch (err) {
+                    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Error: ${err.message}`).setColor(EMBED_BRANDING.errorColor)] });
+                }
+            }
+
+            if (interaction.commandName === 'send-panel') {
+                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+                
+                // 1. Report Tickets Panel
                 const reportEmbed = new EmbedBuilder()
                     .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                    .setTitle("Incident Reports")
-                    .setDescription("Select report category from the options menu.")
+                    .setTitle("REPORT TICKETS")
+                    .setDescription("Press the 🚨 **Create Ticket** button for tickets to report an incident or other users.")
                     .setColor(EMBED_BRANDING.primaryColor);
 
-                const menuReport = new StringSelectMenuBuilder()
-                    .setCustomId('menu_ticket_report')
-                    .setPlaceholder('Select Category')
-                    .addOptions(
-                        new StringSelectMenuOptionBuilder().setLabel('Report High Rank').setValue('report_high_rank'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Exploiter').setValue('report_exploiter'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Abuse').setValue('report_abuser')
-                    );
+                const reportRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('btn_open_report_menu').setLabel('Create Ticket').setStyle(ButtonStyle.Danger)
+                );
+
+                // 2. Other Tickets Panel
+                const otherEmbed = new EmbedBuilder()
+                    .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
+                    .setTitle("OTHER TICKETS")
+                    .setDescription("Press the 🚨 **Create Ticket** button for tickets regarding other matters.")
+                    .setColor(EMBED_BRANDING.primaryColor);
+
+                const otherRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('btn_open_other_menu').setLabel('Create Ticket').setStyle(ButtonStyle.Danger)
+                );
                 
-                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Interface deployed.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
-                return await interaction.channel.send({ embeds: [reportEmbed], components: [new ActionRowBuilder().addComponents(menuReport)] });
+                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Ticket portal panels posted successfully.").setColor('#2ECC71')], ephemeral: true });
+                await interaction.channel.send({ embeds: [reportEmbed], components: [reportRow] });
+                return interaction.channel.send({ embeds: [otherEmbed], components: [otherRow] });
             }
 
-            if (subcommand === 'configure') {
+            if (interaction.commandName === 'ticket') {
+                const subcommand = interaction.options.getSubcommand();
+                if (subcommand === 'configure') {
+                    if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+                    serverConfig.ticketCategory = interaction.options.getChannel('category').id;
+                    saveDB();
+                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Category channel updated.").setColor(EMBED_BRANDING.primaryColor)] });
+                }
+            }
+
+            if (interaction.commandName === 'bmt') {
                 if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                serverConfig.ticketCategory = interaction.options.getChannel('category').id;
-                saveDB();
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Category channel updated.").setColor(EMBED_BRANDING.primaryColor)] });
+                
+                const bmtPanelEmbed = new EmbedBuilder()
+                    .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
+                    .setTitle(EMBED_BRANDING.bmtPanelTitle)
+                    .setDescription("Click below to start your direct DM training quiz assessment. (Requires 4/5 score to pass).")
+                    .setFooter({ text: EMBED_BRANDING.footerText })
+                    .setColor(EMBED_BRANDING.primaryColor);
+
+                const bmtActionRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('btn_start_bmt').setLabel('Start Evaluation').setStyle(ButtonStyle.Primary)
+                );
+
+                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("BMT terminal posted.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
+                return interaction.channel.send({ embeds: [bmtPanelEmbed], components: [bmtActionRow] });
+            }
+
+            if (interaction.commandName === 'update') {
+                await interaction.deferReply({ ephemeral: true });
+                return executeUserUpdate(interaction, member, serverConfig);
             }
         }
 
-        if (interaction.commandName === 'bmt') {
-            if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-            
-            const bmtPanelEmbed = new EmbedBuilder()
-                .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                .setTitle(`${EMBED_BRANDING.groupName} | Basic Training Entry`)
-                .setDescription("Click below to start your direct DM training quiz assessment. (Requires 4/5 score to pass).")
-                .setColor(EMBED_BRANDING.primaryColor);
-
-            const bmtActionRow = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('btn_start_bmt').setLabel('Start Evaluation').setStyle(ButtonStyle.Primary)
-            );
-
-            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("BMT terminal posted.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
-            return interaction.channel.send({ embeds: [bmtPanelEmbed], components: [bmtActionRow] });
-        }
-
-        if (interaction.commandName === 'update') {
-            await interaction.deferReply({ ephemeral: true });
-            return executeUserUpdate(interaction, member, serverConfig);
-        }
-    }
-
-    else if (interaction.isButton()) {
-        if (interaction.customId === 'btn_close_ticket') {
-            await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Deconstruction in process... Room closing.").setColor(EMBED_BRANDING.errorColor)] });
-            if (activeSessions.has(interaction.channel.id)) activeSessions.delete(interaction.channel.id);
-            
-            const closeLog = new EmbedBuilder()
-                .setDescription(`Ticket channel ${interaction.channel.name} closed by ${interaction.user}.`)
-                .setColor(EMBED_BRANDING.errorColor);
-            await sendLog(guild, 'tickets', closeLog);
-            
-            setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
-            return;
-        }
-
-        if (interaction.customId === 'btn_start_bmt') {
-            if (!db.globalVerifiedUsers || !db.globalVerifiedUsers[interaction.user.id]) {
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Verify your Roblox profile link first.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+        else if (interaction.isButton()) {
+            if (interaction.customId === 'btn_close_ticket') {
+                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Deconstruction in process... Room closing.").setColor(EMBED_BRANDING.errorColor)] });
+                if (activeSessions.has(interaction.channel.id)) activeSessions.delete(interaction.channel.id);
+                
+                const closeLog = new EmbedBuilder()
+                    .setDescription(`Ticket channel ${interaction.channel.name} closed by ${interaction.user}.`)
+                    .setColor(EMBED_BRANDING.errorColor);
+                await sendLog(guild, 'tickets', closeLog);
+                
+                setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
+                return;
             }
 
-            try {
-                bmtSessions.set(interaction.user.id, { step: 0, score: 0, guildId: guild.id });
-                await interaction.user.send({ embeds: [
-                    new EmbedBuilder()
-                        .setTitle("BMT Examination")
-                        .setDescription(`**Question 1:** ${BMT_CONFIG.questions[0].q}`)
-                        .setColor(EMBED_BRANDING.primaryColor)
-                ]});
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Quiz check sent to DMs.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
-            } catch (err) {
-                bmtSessions.delete(interaction.user.id);
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Unable to send DM. Check privacy metrics.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-            }
-        }
+            if (interaction.customId === 'btn_start_bmt') {
+                if (!db.globalVerifiedUsers || !db.globalVerifiedUsers[interaction.user.id]) {
+                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Verify your Roblox profile link first.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+                }
 
-        const cooldownKey = `${interaction.user.id}_ticket_cooldown`;
-        if (interaction.customId.startsWith('panel_trigger_verify')) {
-            if (cooldowns.has(cooldownKey) && cooldowns.get(cooldownKey) > Date.now()) {
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Rate limit active. Wait before re-trying.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-            }
-        }
-
-        if (interaction.customId === 'panel_trigger_verify_ticket' || interaction.customId === 'panel_trigger_verify_login') {
-            await interaction.deferReply({ ephemeral: true });
-            if (!serverConfig.ticketCategory) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Configuration missing.").setColor(EMBED_BRANDING.errorColor)] });
-
-            const channels = await interaction.guild.channels.fetch().catch(() => null);
-            if (channels) {
-                const openCheck = channels.find(c => c && c.parentId === serverConfig.ticketCategory && c.type === ChannelType.GuildText && c.permissionOverwrites?.cache?.has(interaction.user.id));
-                if (openCheck) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Active target available: ${openCheck}`).setColor(EMBED_BRANDING.errorColor)] });
+                try {
+                    bmtSessions.set(interaction.user.id, { step: 0, score: 0, guildId: guild.id });
+                    await interaction.user.send({ embeds: [
+                        new EmbedBuilder()
+                            .setTitle("BMT Examination")
+                            .setDescription(`**Question 1:** ${BMT_CONFIG.questions[0].q}`)
+                            .setColor(EMBED_BRANDING.primaryColor)
+                    ]});
+                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Quiz check sent to DMs.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
+                } catch (err) {
+                    bmtSessions.delete(interaction.user.id);
+                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Unable to send DM. Check privacy metrics.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+                }
             }
 
-            cooldowns.set(cooldownKey, Date.now() + 10000); 
-            return await generateFinalTicket(interaction, "verify", "verification", serverConfig.ticketCategory);
-        }
-
-        if (interaction.customId === 'btn_update_roles') {
-            await interaction.deferReply({ ephemeral: true });
-            return await executeUserUpdate(interaction, member, serverConfig);
-        }
-    }
-
-    else if (interaction.isStringSelectMenu()) {
-        if (interaction.customId === 'menu_ticket_report' || interaction.customId === 'menu_ticket_other') {
+            // --- 10 SECOND COOLDOWN CHECK AS SEEN IN VIDEO ---
             const cooldownKey = `${interaction.user.id}_ticket_cooldown`;
-            if (cooldowns.has(cooldownKey) && cooldowns.get(cooldownKey) > Date.now()) {
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Action locked on cooldown.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+            if (interaction.customId === 'btn_open_report_menu' || interaction.customId === 'btn_open_other_menu') {
+                if (cooldowns.has(cooldownKey) && cooldowns.get(cooldownKey) > Date.now()) {
+                    const cdEmbed = new EmbedBuilder()
+                        .setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
+                        .setTitle("Warning - Cooldown")
+                        .setDescription("You're currently on a **10s cooldown** for the **Create Ticket** button!")
+                        .setColor(EMBED_BRANDING.errorColor);
+                    return interaction.reply({ embeds: [cdEmbed], ephemeral: true });
+                }
+                cooldowns.set(cooldownKey, Date.now() + 10000); // 10 second lock
             }
 
-            await interaction.deferReply({ ephemeral: true });
-            const selection = interaction.values[0];
-            let cleanChannelPrefix = selection.startsWith('report_') ? "report" : "other";
-            let selectionLabel = selection.replace('report_', '').replace('other_', '').replace(/_/g, '-');
+            // --- REPORT TICKET SELECTION DROP-DOWN PROMPT ---
+            if (interaction.customId === 'btn_open_report_menu') {
+                const reportMenu = new StringSelectMenuBuilder()
+                    .setCustomId('menu_select_ticket_action')
+                    .setPlaceholder('Select Ticket Type')
+                    .addOptions(
+                        new StringSelectMenuOptionBuilder().setLabel('Report High Rank').setValue('report_high_rank').setDescription('Report a high ranking officer.'),
+                        new StringSelectMenuOptionBuilder().setLabel('Report Exploiter').setValue('report_exploiter').setDescription('Report an exploiter in game to our moderation team'),
+                        new StringSelectMenuOptionBuilder().setLabel('Report Corruption').setValue('report_corruption').setDescription('Report a corrupted user'),
+                        new StringSelectMenuOptionBuilder().setLabel('Report Abuser').setValue('report_abuser').setDescription('Report an abuser'),
+                        new StringSelectMenuOptionBuilder().setLabel('Report Rule Breaker').setValue('report_rule_breaker').setDescription('Report a rule breaker')
+                    );
 
-            if (!serverConfig.ticketCategory) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Target metrics missing.").setColor(EMBED_BRANDING.errorColor)] });
-
-            const channels = await interaction.guild.channels.fetch().catch(() => null);
-            if (channels) {
-                const openCheck = channels.find(c => c && c.parentId === serverConfig.ticketCategory && c.type === ChannelType.GuildText && c.permissionOverwrites?.cache?.has(interaction.user.id));
-                if (openCheck) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Active ticket space: ${openCheck}`).setColor(EMBED_BRANDING.errorColor)] });
+                const actionRow = new ActionRowBuilder().addComponents(reportMenu);
+                return interaction.reply({ content: '**Create Ticket**\nPlease select what ticket you wish to create.', components: [actionRow], ephemeral: true });
             }
 
-            cooldowns.set(cooldownKey, Date.now() + 10000);
-            return await generateFinalTicket(interaction, cleanChannelPrefix, selectionLabel, serverConfig.ticketCategory);
+            // --- OTHER TICKET SELECTION DROP-DOWN PROMPT ---
+            if (interaction.customId === 'btn_open_other_menu') {
+                const otherMenu = new StringSelectMenuBuilder()
+                    .setCustomId('menu_select_ticket_action')
+                    .setPlaceholder('Select Ticket Type')
+                    .addOptions(
+                        new StringSelectMenuOptionBuilder().setLabel('Report Bug / Glitch').setValue('other_bug_glitch').setDescription('Report an in game / discord glitch or bug to our developers'),
+                        new StringSelectMenuOptionBuilder().setLabel('Report Exploit Script').setValue('other_exploit_script').setDescription('Report an exploit script or vulnerability to our developers'),
+                        new StringSelectMenuOptionBuilder().setLabel('Developer Application').setValue('other_developer_app').setDescription('Apply to become a developer for British Army'),
+                        new StringSelectMenuOptionBuilder().setLabel('Alliance Application').setValue('other_alliance_app').setDescription('Apply to become an ally with the British Army')
+                    );
+
+                const actionRow = new ActionRowBuilder().addComponents(otherMenu);
+                return interaction.reply({ content: '**Create Ticket**\nPlease select what ticket you wish to create.', components: [actionRow], ephemeral: true });
+            }
         }
+
+        else if (interaction.isStringSelectMenu()) {
+            if (interaction.customId === 'menu_select_ticket_action') {
+                await interaction.deferReply({ ephemeral: true });
+                const selection = interaction.values[0];
+                
+                if (!serverConfig.ticketCategory) {
+                    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Ticket system category channel is missing setup configurations.").setColor(EMBED_BRANDING.errorColor)] });
+                }
+
+                // Check for existing open tickets under category
+                const channels = await interaction.guild.channels.fetch().catch(() => null);
+                if (channels) {
+                    const openCheck = channels.find(c => c && c.parentId === serverConfig.ticketCategory && c.type === ChannelType.GuildText && c.permissionOverwrites?.cache?.has(interaction.user.id));
+                    if (openCheck) {
+                        return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`You already have an open ticket layout active here: ${openCheck}`).setColor(EMBED_BRANDING.errorColor)] });
+                    }
+                }
+
+                let prefix = selection.startsWith('report_') ? "report" : "other";
+                let labelCleaned = selection.replace('report_', '').replace('other_', '').replace(/_/g, '-');
+                
+                return await generateFinalTicket(interaction, prefix, labelCleaned, serverConfig.ticketCategory);
+            }
+        }
+    } catch (err) {
+        console.error("Interaction Routing Error Caught Safely:", err);
     }
 });
 
