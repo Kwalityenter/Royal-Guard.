@@ -7,7 +7,7 @@ const OWNER_ID = "1151872484937834496"; // 👈 Paste your numeric Discord ID he
 const EMBED_BRANDING = {
     // Header & Author Settings
     authorName: 'Royal Guard',                              // The small text at the very top of embeds
-    authorIcon: 'https://i.imgur.com/YourImageLink.png',     // The small circular image next to author name
+    authorIcon: 'https://i.imgur.com/KPXEg2s.png',     // The small circular image next to author name
     groupName: 'BRITISH ARMY',                              // Your main group/game title
     
     // Main Embed Appearance
