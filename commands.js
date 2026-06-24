@@ -229,3 +229,10 @@ module.exports = [
         description: 'Update your own roles based on your Roblox group status'
     }
 ];
+module.exports = [
+    // ... your other existing commands here ...
+    {
+        name: 'activitycheck',
+        description: 'Hosts an active community/staff activity check with a live click tracker.'
+    }
+];
