@@ -36,10 +36,6 @@ const BMT_CONFIG = {
     ]
 };
 
-// ========================================================================
-// 🛑 END OF CUSTOMIZATION ZONE (DO NOT EDIT BELOW UNLESS YOU KNOW CODE)
-// ========================================================================
-
 const { 
     Client, 
     GatewayIntentBits, 
@@ -91,7 +87,20 @@ if (fs.existsSync(commandsPath)) {
     try { slashCommandsData = require(commandsPath); } catch (err) {}
 }
 
-const DB_FILE = './database.json';
+// --- 💾 AUTOMATIC RAILWAY VOLUME DETECTOR (GITHUB-PROOF) ---
+let DB_FILE = './database.json';
+
+if (process.env.DATA_PATH) {
+    DB_FILE = process.env.DATA_PATH;
+} else if (fs.existsSync('/data')) { 
+    DB_FILE = '/data/database.json';
+}
+
+const dbDir = path.dirname(DB_FILE);
+if (!fs.existsSync(dbDir)) {
+    try { fs.mkdirSync(dbDir, { recursive: true }); } catch (e) {}
+}
+
 let db = {};
 if (!fs.existsSync(DB_FILE)) {
     try { fs.writeFileSync(DB_FILE, JSON.stringify({ licensedGuilds: [] }, null, 2), 'utf8'); } catch (e) {}
@@ -107,6 +116,7 @@ if (!db.licensedGuilds) db.licensedGuilds = [];
 function saveDB() {
     try { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); } catch (e) {}
 }
+// --- 💾 END OF DATABASE SETUP ---
 
 const activeSessions = new Map();
 const bmtSessions = new Map(); 
@@ -710,14 +720,50 @@ client.on('interactionCreate', async interaction => {
         }
 
         if (!db[guild.id]) {
-            db[guild.id] = { groupId: null, binds: [], adminUsers: {}, adminRoles: {}, ticketCategory: null, ticketCount: 0, robloxCookie: null, logChannels: {} };
+            db[guild.id] = { groupId: null, binds: [], adminUsers: {}, adminRoles: {}, ticketCategory: null, ticketCount: 0, robloxCookie: null, logChannels: {}, activityChecks: {} };
             saveDB();
         }
         const serverConfig = db[guild.id];
+        if (!serverConfig.activityChecks) serverConfig.activityChecks = {};
+        
         const callerAdminLevel = getAdminLevel(guild, member);
 
         if (interaction.isChatInputCommand()) {
             
+            // --- 📢 REPLICATED ACTIVITY CHECK COMMAND ---
+            if (interaction.commandName === 'activitycheck') {
+                if (callerAdminLevel < 2) {
+                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+                }
+
+                await interaction.reply({ content: `Activity check posted in ${interaction.channel}` });
+
+                const activityEmbed = new EmbedBuilder()
+                    .setTitle("Activity Check! – Activity Check")
+                    .setDescription("An activity check is being hosted right now. Use the ✅ Mark Activity button below to mark your activity.")
+                    .addFields({ name: "Hosted By", value: `${interaction.user}`, inline: false })
+                    .setFooter({ text: "DXHiro © 2026. All Rights Reserved." })
+                    .setTimestamp()
+                    .setColor('#111111');
+
+                const trackingRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('btn_mark_activity')
+                        .setLabel('✅ 0')
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+                const postedMessage = await interaction.channel.send({ 
+                    content: "@everyone", 
+                    embeds: [activityEmbed], 
+                    components: [trackingRow] 
+                });
+
+                serverConfig.activityChecks[postedMessage.id] = [];
+                saveDB();
+                return;
+            }
+
             if (interaction.commandName === 'set-cookie') {
                 if (callerAdminLevel < 8) {
                     return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Server owner command only.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
@@ -858,7 +904,6 @@ client.on('interactionCreate', async interaction => {
             if (interaction.commandName === 'send-panel') {
                 if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
                 
-                // 1. Report Tickets Panel
                 const reportEmbed = new EmbedBuilder()
                     .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
                     .setTitle("REPORT TICKETS")
@@ -869,7 +914,6 @@ client.on('interactionCreate', async interaction => {
                     new ButtonBuilder().setCustomId('btn_open_report_menu').setLabel('Create Ticket').setStyle(ButtonStyle.Danger)
                 );
 
-                // 2. Other Tickets Panel
                 const otherEmbed = new EmbedBuilder()
                     .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
                     .setTitle("OTHER TICKETS")
@@ -920,6 +964,35 @@ client.on('interactionCreate', async interaction => {
         }
 
         else if (interaction.isButton()) {
+            
+            // --- 🔄 HANDLE ACTIVITY CHECK COUNTER TRACKING BUTTON ---
+            if (interaction.customId === 'btn_mark_activity') {
+                const msgId = interaction.message.id;
+                
+                if (!serverConfig.activityChecks[msgId]) {
+                    serverConfig.activityChecks[msgId] = [];
+                }
+
+                const participants = serverConfig.activityChecks[msgId];
+                
+                if (participants.includes(interaction.user.id)) {
+                    return interaction.reply({ content: "You have already logged your activity confirmation for this check assignment!", ephemeral: true });
+                }
+
+                participants.push(interaction.user.id);
+                saveDB();
+
+                const updatedRow = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('btn_mark_activity')
+                        .setLabel(`✅ ${participants.length}`)
+                        .setStyle(ButtonStyle.Secondary)
+                );
+
+                await interaction.message.edit({ components: [updatedRow] });
+                return interaction.reply({ content: "Your activity status has been saved successfully! ✅", ephemeral: true });
+            }
+
             if (interaction.customId === 'btn_close_ticket') {
                 await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Deconstruction in process... Room closing.").setColor(EMBED_BRANDING.errorColor)] });
                 if (activeSessions.has(interaction.channel.id)) activeSessions.delete(interaction.channel.id);
@@ -953,7 +1026,6 @@ client.on('interactionCreate', async interaction => {
                 }
             }
 
-            // --- 10 SECOND COOLDOWN CHECK AS SEEN IN VIDEO ---
             const cooldownKey = `${interaction.user.id}_ticket_cooldown`;
             if (interaction.customId === 'btn_open_report_menu' || interaction.customId === 'btn_open_other_menu') {
                 if (cooldowns.has(cooldownKey) && cooldowns.get(cooldownKey) > Date.now()) {
@@ -964,10 +1036,9 @@ client.on('interactionCreate', async interaction => {
                         .setColor(EMBED_BRANDING.errorColor);
                     return interaction.reply({ embeds: [cdEmbed], ephemeral: true });
                 }
-                cooldowns.set(cooldownKey, Date.now() + 10000); // 10 second lock
+                cooldowns.set(cooldownKey, Date.now() + 10000);
             }
 
-            // --- REPORT TICKET SELECTION DROP-DOWN PROMPT ---
             if (interaction.customId === 'btn_open_report_menu') {
                 const reportMenu = new StringSelectMenuBuilder()
                     .setCustomId('menu_select_ticket_action')
@@ -984,7 +1055,6 @@ client.on('interactionCreate', async interaction => {
                 return interaction.reply({ content: '**Create Ticket**\nPlease select what ticket you wish to create.', components: [actionRow], ephemeral: true });
             }
 
-            // --- OTHER TICKET SELECTION DROP-DOWN PROMPT ---
             if (interaction.customId === 'btn_open_other_menu') {
                 const otherMenu = new StringSelectMenuBuilder()
                     .setCustomId('menu_select_ticket_action')
@@ -1010,7 +1080,6 @@ client.on('interactionCreate', async interaction => {
                     return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Ticket system category channel is missing setup configurations.").setColor(EMBED_BRANDING.errorColor)] });
                 }
 
-                // Check for existing open tickets under category
                 const channels = await interaction.guild.channels.fetch().catch(() => null);
                 if (channels) {
                     const openCheck = channels.find(c => c && c.parentId === serverConfig.ticketCategory && c.type === ChannelType.GuildText && c.permissionOverwrites?.cache?.has(interaction.user.id));
