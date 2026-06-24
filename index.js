@@ -55,6 +55,7 @@ const { request } = require('undici');
 const fs = require('fs');
 const path = require('path');
 const http = require('http');
+const mongoose = require('mongoose'); // 💾 Loaded MongoDB Driver
 
 // --- RAILWAY HEALTH CHECK SERVER ---
 http.createServer((req, res) => {
@@ -73,11 +74,16 @@ if (fs.existsSync(CONFIG_FILE)) {
 
 const TOKEN = process.env.TOKEN || config.TOKEN;
 const CLIENT_ID = process.env.CLIENT_ID || config.CLIENT_ID;
+const MONGO_URI = process.env.MONGO_URI || config.MONGO_URI; // 💾 MongoDB Connection string variable
 const VERIFIED_ROLE_NAME = process.env.VERIFIED_ROLE_NAME || config.VERIFIED_ROLE_NAME || "Verified";
 const PROTECTED_USERS = config.QUARANTINE_PROTECTED_IDS || [];
 
 if (!TOKEN) {
     console.error("Missing token.");
+    process.exit(1);
+}
+if (!MONGO_URI) {
+    console.error("Missing MONGO_URI environment variable connection string.");
     process.exit(1);
 }
 
@@ -87,36 +93,22 @@ if (fs.existsSync(commandsPath)) {
     try { slashCommandsData = require(commandsPath); } catch (err) {}
 }
 
-// --- 💾 AUTOMATIC RAILWAY VOLUME DETECTOR (GITHUB-PROOF) ---
-let DB_FILE = './database.json';
-
-if (process.env.DATA_PATH) {
-    DB_FILE = process.env.DATA_PATH;
-} else if (fs.existsSync('/data')) { 
-    DB_FILE = '/data/database.json';
-}
-
-const dbDir = path.dirname(DB_FILE);
-if (!fs.existsSync(dbDir)) {
-    try { fs.mkdirSync(dbDir, { recursive: true }); } catch (e) {}
-}
-
+// --- 💾 MONGODB CLOUD ENGINE INITIALIZATION ---
 let db = {};
-if (!fs.existsSync(DB_FILE)) {
-    try { fs.writeFileSync(DB_FILE, JSON.stringify({ licensedGuilds: [] }, null, 2), 'utf8'); } catch (e) {}
-} else {
-    try {
-        const content = fs.readFileSync(DB_FILE, 'utf8').trim();
-        db = content ? JSON.parse(content) : {};
-    } catch { db = { licensedGuilds: [] }; }
-}
 
-if (!db.licensedGuilds) db.licensedGuilds = [];
+const DataSchema = new mongoose.Schema({
+    key: { type: String, default: 'global_state' },
+    data: { type: mongoose.Schema.Types.Mixed, default: {} }
+});
+const DataModel = mongoose.model('BotData', DataSchema);
 
 function saveDB() {
-    try { fs.writeFileSync(DB_FILE, JSON.stringify(db, null, 2)); } catch (e) {}
+    // Background fire-and-forget background cloud document update
+    DataModel.updateOne({ key: 'global_state' }, { data: db }, { upsert: true })
+        .then(() => console.log(`[MONGODB] State synchronized successfully to Cloud Cluster Database Storage.`))
+        .catch(e => console.error(`[MONGODB ERROR] Cluster rejected write payload operation:`, e));
 }
-// --- 💾 END OF DATABASE SETUP ---
+// --- 💾 END OF MONGODB ENGINE ---
 
 const activeSessions = new Map();
 const bmtSessions = new Map(); 
@@ -730,7 +722,6 @@ client.on('interactionCreate', async interaction => {
 
         if (interaction.isChatInputCommand()) {
             
-            // --- 📢 REPLICATED ACTIVITY CHECK COMMAND ---
             if (interaction.commandName === 'activitycheck') {
                 if (callerAdminLevel < 2) {
                     return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
@@ -965,7 +956,6 @@ client.on('interactionCreate', async interaction => {
 
         else if (interaction.isButton()) {
             
-            // --- 🔄 HANDLE ACTIVITY CHECK COUNTER TRACKING BUTTON ---
             if (interaction.customId === 'btn_mark_activity') {
                 const msgId = interaction.message.id;
                 
@@ -1099,4 +1089,24 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-client.login(TOKEN);
+// 💾 CONNECT TO CLOUD DATABASE FIRST, THEN START BOT INTERFACES
+mongoose.connect(MONGO_URI)
+    .then(async () => {
+        console.log("[MONGODB] Connected safely to your remote MongoDB Atlas Cluster.");
+        
+        let record = await DataModel.findOne({ key: 'global_state' });
+        if (!record) {
+            record = new DataModel({ key: 'global_state', data: { licensedGuilds: [] } });
+            await record.save();
+        }
+        
+        db = record.data;
+        if (!db.licensedGuilds) db.licensedGuilds = [];
+        
+        // Login to Discord only after structural cloud state has fully synchronized
+        client.login(TOKEN);
+    })
+    .catch(err => {
+        console.error("[CRITICAL] MongoDB Cloud Connection Denied:", err);
+        process.exit(1);
+    });
