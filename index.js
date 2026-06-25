@@ -1,1112 +1,625 @@
-// ========================================================================
-// 🛠️ THE ULTIMATE CUSTOMIZATION ZONE (CHANGE ANYTHING YOU WANT HERE!)
-// ========================================================================
-
-const OWNER_ID = "1151872484937834496"; // 👈 Paste your numeric Discord ID here!
-
-const EMBED_BRANDING = {
-    // Header & Author Settings
-    authorName: 'Royal Guard',                              // The small text at the very top of embeds
-    authorIcon: 'https://i.imgur.com/KPXEg2s.png',     // The small circular image next to author name
-    groupName: 'BRITISH ARMY',                              // Your main group/game title
+// ==========================================
+// CONFIGURATION & CUSTOMIZATION
+// ==========================================
+const EMBED_CONFIG = {
+    primaryColor: "#0055ff",
+    errorColor: "#cc0000",
+    neutralColor: "#2b2d31",
+    loadingColor: "#ffaa00",
+    authorName: "Royal Guard",
+    footerText: "Royal Guard Services @ 2026. All Rights Reserved",
     
-    // Main Embed Appearance
-    primaryColor: '#23a6f2',                                // Hex code for Panels/Success (Default: Deep Red)
-    errorColor: '#fc6b0b',                                  // Hex code for restriction/cooldown embeds (Default: Rust Orange)
+    // Panel Texts
+    verificationTitle: "BRITISH ARMY VERIFICATION SYSTEM V1",
+    verificationDescription: "Press the Verify via ROBLOX Login button to verify via OAuth2. Press the Verify via ROBLOX Game button to verify or reverify your ROBLOX account. Press the Update Roles button to update your Discord roles.",
     
-    // Custom Titles (Change these to whatever headers you want!)
-    verificationTitle: 'BRITISH ARMY VERIFICATION SYSTEM V1.0',
-    rolesSystemTitle: 'Roles Successfully Updated',
-    bmtPanelTitle: 'Auto BMT System',
-    bgCheckTitle: 'Background Check',
-
-    // Footers
-    footerText: 'Made by Royal Guard Services, All rights reserved.'           // Text at the bottom of the embeds
+    reportPanelTitle: "Royal Guard",
+    reportPanelDescription: "REPORT TICKETS\n\nPress the Create Ticket button for tickets to report an incident or other users.",
+    
+    otherPanelTitle: "Royal Guard",
+    otherPanelDescription: "OTHER TICKETS\n\nPress the Create Ticket button for tickets regarding other matters."
 };
 
-const BMT_CONFIG = {
-    targetRankValue: 2, 
-    requiredCorrect: 4, 
-    questions: [
-        { q: "Is advertising outside groups allowed in BA?", a: ["no"] },
-        { q: "Who is current Field Marshal of BA?", a: ["gutalidarsh"] },
-        { q: "Can you troll inside Belfast Garrison?", a: ["no"] },
-        { q: "Can you random kill people inside Belfast Garrison?", a: ["no"] },
-        { q: "Who is responsible for handling decorum inside Belfast Garrison?", a: ["royal military police", "rmp"] }
-    ]
+// Admin Level Permissions Descriptions
+const LEVEL_PERMISSIONS = {
+    10: "Absolute Control, Manage Admins (Server Owner Level)",
+    9: "Full Bot Configurations, Deploy System Panels",
+    8: "High Ticket Management, Update System Configurations",
+    7: "Manage Channels & Overrides, Delete Active Tickets",
+    6: "Middle Management Support, Access Staff Commands",
+    5: "Run Advanced Background Audits & Member Inquiries",
+    4: "Run Basic Background Checks (!bgcheck)",
+    3: "Claim and Handle Support / Report Tickets",
+    2: "Claim and Handle Basic Verification Tickets",
+    1: "View Internal Restricted Log Channels"
 };
+// ==========================================
 
 const { 
     Client, 
     GatewayIntentBits, 
-    PermissionFlagsBits, 
     EmbedBuilder, 
     ChannelType, 
-    REST, 
-    Routes, 
-    ActionRowBuilder, 
-    ButtonBuilder, 
-    ButtonStyle, 
-    StringSelectMenuBuilder, 
-    StringSelectMenuOptionBuilder, 
-    PermissionsBitField 
+    PermissionFlagsBits,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    StringSelectMenuBuilder,
+    REST,
+    Routes,
+    SlashCommandBuilder
 } = require('discord.js');
-const { request } = require('undici');
 const fs = require('fs');
-const path = require('path');
-const http = require('http');
-const mongoose = require('mongoose'); // 💾 Loaded MongoDB Driver
+const axios = require('axios');
+const mongoose = require('mongoose');
 
-// --- RAILWAY HEALTH CHECK SERVER ---
-http.createServer((req, res) => {
-    res.writeHead(200, { 'Content-Type': 'text/plain' });
-    res.end('Bot is online');
-}).listen(process.env.PORT || 3000, () => {
-    console.log(`Health check backend listening on port ${process.env.PORT || 3000}`);
-});
-
-const CONFIG_FILE = './config.json';
-let config = {};
-
-if (fs.existsSync(CONFIG_FILE)) {
-    try { config = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch (err) {}
-}
-
-const TOKEN = process.env.TOKEN || config.TOKEN;
-const CLIENT_ID = process.env.CLIENT_ID || config.CLIENT_ID;
-const MONGO_URI = process.env.MONGO_URI || config.MONGO_URI; // 💾 MongoDB Connection string variable
-const VERIFIED_ROLE_NAME = process.env.VERIFIED_ROLE_NAME || config.VERIFIED_ROLE_NAME || "Verified";
-const PROTECTED_USERS = config.QUARANTINE_PROTECTED_IDS || [];
-
-if (!TOKEN) {
-    console.error("Missing token.");
-    process.exit(1);
-}
-if (!MONGO_URI) {
-    console.error("Missing MONGO_URI environment variable connection string.");
-    process.exit(1);
-}
-
-let slashCommandsData = [];
-const commandsPath = path.join(__dirname, 'commands.js');
-if (fs.existsSync(commandsPath)) {
-    try { slashCommandsData = require(commandsPath); } catch (err) {}
-}
-
-// --- 💾 MONGODB CLOUD ENGINE INITIALIZATION ---
-let db = {};
-
-const DataSchema = new mongoose.Schema({
-    key: { type: String, default: 'global_state' },
-    data: { type: mongoose.Schema.Types.Mixed, default: {} }
-});
-const DataModel = mongoose.model('BotData', DataSchema);
-
-function saveDB() {
-    // Background fire-and-forget background cloud document update
-    DataModel.updateOne({ key: 'global_state' }, { data: db }, { upsert: true })
-        .then(() => console.log(`[MONGODB] State synchronized successfully to Cloud Cluster Database Storage.`))
-        .catch(e => console.error(`[MONGODB ERROR] Cluster rejected write payload operation:`, e));
-}
-// --- 💾 END OF MONGODB ENGINE ---
-
-const activeSessions = new Map();
-const bmtSessions = new Map(); 
-const cooldowns = new Map();
-
-const randomWords = ["apple", "banana", "robot", "blue", "army", "up", "down", "left", "right", "yes", "no", "green", "tiger", "shadow", "alpha", "delta", "verification", "cheese"];
-function generateVerificationCode() {
-    let shuffled = randomWords.sort(() => 0.5 - Math.random());
-    return shuffled.slice(0, 6).join(" ");
-}
-
-function getAdminLevel(guild, member) {
-    if (guild.ownerId === member.id) return 8; 
-    const serverConfig = db[guild.id];
-    if (!serverConfig) return 0;
-    let highestLevel = 0;
-    if (serverConfig.adminUsers && serverConfig.adminUsers[member.id]) {
-        highestLevel = Math.max(highestLevel, serverConfig.adminUsers[member.id]);
-    }
-    if (serverConfig.adminRoles) {
-        for (const [roleId, level] of Object.entries(serverConfig.adminRoles)) {
-            if (member.roles.cache.has(roleId)) {
-                highestLevel = Math.max(highestLevel, serverConfig.adminRoles[roleId]);
-            }
-        }
-    }
-    if (highestLevel === 0 && member.permissions.has(PermissionFlagsBits.Administrator)) {
-        return 1; 
-    }
-    return highestLevel;
-}
-
-async function sendLog(guild, type, embed) {
-    const serverConfig = db[guild.id];
-    if (!serverConfig || !serverConfig.logChannels || !serverConfig.logChannels[type]) return;
-    const channel = guild.channels.cache.get(serverConfig.logChannels[type]);
-    if (channel) {
-        await channel.send({ embeds: [embed] }).catch(() => {});
-    }
-}
-
-async function getRobloxUser(username) {
-    try {
-        const res = await request('https://users.roblox.com/v1/usernames/users', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ usernames: [username], excludeBannedUsers: false })
-        });
-        const data = await res.body.json();
-        if (data.data && data.data.length > 0) {
-            const user = data.data[0];
-            const pRes = await request(`https://users.roblox.com/v1/users/${user.id}`);
-            const pData = await pRes.body.json();
-            return { id: user.id, username: user.requestedUsername || user.name, description: pData.description || "", created: pData.created };
-        }
-    } catch (e) {}
-    return null;
-}
-
-async function getRobloxUserById(userId) {
-    try {
-        const res = await request(`https://users.roblox.com/v1/users/${userId}`);
-        const data = await res.body.json();
-        if (data && data.id) {
-            return { id: data.id, username: data.name, description: data.description || "", created: data.created };
-        }
-    } catch (e) {}
-    return null;
-}
-
-async function getRobloxUserRank(userId, groupId) {
-    try {
-        const res = await request(`https://groups.roblox.com/v2/users/${userId}/groups/roles`);
-        const data = await res.body.json();
-        if (data && data.data) {
-            const group = data.data.find(g => g.group.id === parseInt(groupId, 10));
-            return group ? group.role.rank : 0; 
-        }
-    } catch (e) {}
-    return 0;
-}
-
-async function getRobloxFullGroupInfo(userId, groupId) {
-    try {
-        const res = await request(`https://groups.roblox.com/v2/users/${userId}/groups/roles`);
-        const data = await res.body.json();
-        if (data && data.data) {
-            const group = data.data.find(g => g.group.id === parseInt(groupId, 10));
-            if (group) return { name: group.role.name, rank: group.role.rank };
-        }
-    } catch (e) {}
-    return { name: "Guest / Non-member", rank: 0 };
-}
-
-async function getRobloxUserHistory(userId) {
-    try {
-        const res = await request(`https://users.roblox.com/v1/users/${userId}/username-history?limit=10&sortOrder=Desc`);
-        const data = await res.body.json();
-        if (data && data.data && data.data.length > 0) {
-            return data.data.map(u => u.name).join(', ');
-        }
-    } catch (e) {}
-    return "None";
-}
-
-async function changeRobloxRank(guildId, robloxUserId, targetRankValue) {
-    const serverConfig = db[guildId];
-    if (!serverConfig || !serverConfig.robloxCookie || !serverConfig.groupId) {
-        throw new Error("Roblox credentials missing from configuration.");
-    }
-
-    const rolesRes = await request(`https://groups.roblox.com/v1/groups/${serverConfig.groupId}/roles`);
-    const rolesData = await rolesRes.body.json();
-    const targetRole = rolesData.roles.find(r => r.rank === parseInt(targetRankValue, 10));
-    
-    if (!targetRole) throw new Error(`Rank not found: ${targetRankValue}`);
-
-    const csrfRes = await request('https://auth.roblox.com/v2/logout', {
-        method: 'POST',
-        headers: { 'Cookie': `.ROBLOSECURITY=${serverConfig.robloxCookie}` }
-    });
-    const xCsrfToken = csrfRes.headers['x-csrf-token'];
-
-    const patchRes = await request(`https://groups.roblox.com/v1/groups/${serverConfig.groupId}/users/${robloxUserId}`, {
-        method: 'PATCH',
-        headers: {
-            'Cookie': `.ROBLOSECURITY=${serverConfig.robloxCookie}`,
-            'X-CSRF-TOKEN': xCsrfToken,
-            'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ roleId: targetRole.id })
-    });
-
-    if (patchRes.statusCode !== 200) {
-        throw new Error(`Roblox API Error: ${patchRes.statusCode}`);
-    }
-    return targetRole.name;
-}
-
-async function executeUserUpdate(interaction, member, serverConfig, explicitUserId = null) {
-    let robloxUser = null;
-    if (explicitUserId) {
-        robloxUser = await getRobloxUserById(explicitUserId);
-    } else if (db.globalVerifiedUsers && db.globalVerifiedUsers[member.id]) {
-        robloxUser = await getRobloxUserById(db.globalVerifiedUsers[member.id]);
-    }
-    
-    if (!robloxUser) {
-        robloxUser = await getRobloxUser((member.nickname || member.user.username).replace(/^\[[^\]]+\]\s*/, '').trim());
-    }
-    
-    if (!robloxUser) {
-        const errEmbed = new EmbedBuilder().setDescription("Could not locate your Roblox profile.").setColor(EMBED_BRANDING.errorColor);
-        if (interaction && interaction.editReply && (interaction.deferred || interaction.replied)) {
-            return interaction.editReply({ embeds: [errEmbed] });
-        }
-        return interaction && interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : null;
-    }
-
-    if (!db.globalVerifiedUsers) db.globalVerifiedUsers = {};
-    db.globalVerifiedUsers[member.id] = robloxUser.id;
-    saveDB();
-
-    if (!serverConfig.groupId) {
-        const errEmbed = new EmbedBuilder().setDescription("Roblox Group ID is missing.").setColor(EMBED_BRANDING.errorColor);
-        if (interaction && interaction.editReply && (interaction.deferred || interaction.replied)) {
-            return interaction.editReply({ embeds: [errEmbed] });
-        }
-        return interaction && interaction.channel ? interaction.channel.send({ embeds: [errEmbed] }) : null;
-    }
-
-    const rankValue = await getRobloxUserRank(robloxUser.id, serverConfig.groupId);
-    
-    const targetRoleIds = new Set();
-    const allManagedRoles = new Set();
-    let selectedPrefix = "None";
-    let highestPrefixWeight = -1;
-
-    if (serverConfig.binds && Array.isArray(serverConfig.binds)) {
-        for (const bind of serverConfig.binds) {
-            if (bind.roleIds) bind.roleIds.forEach(id => allManagedRoles.add(id));
-            if (bind.roleId) allManagedRoles.add(bind.roleId);
-
-            let matches = false;
-            const comp = bind.compare || '==';
-            const targetRank = parseInt(bind.rank, 10);
-
-            if (comp === '==' && rankValue === targetRank) matches = true;
-            else if (comp === '>=' && rankValue >= targetRank) matches = true;
-            else if (comp === '<=' && rankValue <= targetRank) matches = true;
-            else if (comp === '>' && rankValue > targetRank) matches = true;
-            else if (comp === '<' && rankValue < targetRank) matches = true;
-            else if (comp === 'range' && rankValue >= parseInt(bind.minRank, 10) && rankValue <= parseInt(bind.maxRank, 10)) matches = true;
-
-            if (matches) {
-                if (bind.roleIds) bind.roleIds.forEach(id => targetRoleIds.add(id));
-                if (bind.roleId) targetRoleIds.add(bind.roleId);
-                
-                if (bind.prefix && (comp === 'range' ? parseInt(bind.minRank, 10) : targetRank) > highestPrefixWeight) {
-                    selectedPrefix = bind.prefix;
-                    highestPrefixWeight = comp === 'range' ? parseInt(bind.minRank, 10) : targetRank;
-                }
-            }
-        }
-    }
-
-    const formatPrefix = selectedPrefix !== "None" ? `[${selectedPrefix.replace(/[\[\]]/g, '')}] ` : "";
-    const finalNickname = `${formatPrefix}${robloxUser.username}`.substring(0, 32);
-    await member.setNickname(finalNickname).catch(() => {});
-    
-    const verifiedRole = member.guild.roles.cache.find(r => r.name === VERIFIED_ROLE_NAME);
-    if (verifiedRole) await member.roles.add(verifiedRole).catch(() => {});
-
-    let rolesAddedList = [];
-    let rolesRemovedList = [];
-
-    for (const rId of targetRoleIds) {
-        if (!member.roles.cache.has(rId)) {
-            await member.roles.add(rId).catch(() => {});
-            rolesAddedList.push(`<@&${rId}>`);
-        }
-    }
-
-    for (const rId of allManagedRoles) {
-        if (!targetRoleIds.has(rId) && member.roles.cache.has(rId)) {
-            await member.roles.remove(rId).catch(() => {});
-            rolesRemovedList.push(`<@&${rId}>`);
-        }
-    }
-
-    const responseEmbed = new EmbedBuilder()
-        .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-        .setTitle(EMBED_BRANDING.rolesSystemTitle)
-        .setDescription("Updated user configurations successfully.")
-        .addFields(
-            { name: "Nickname", value: finalNickname, inline: false },
-            { name: "Roles Added", value: rolesAddedList.length > 0 ? rolesAddedList.map(r => `• ${r}`).join('\n') : "None", inline: false },
-            { name: "Roles Removed", value: rolesRemovedList.length > 0 ? rolesRemovedList.map(r => `• ${r}`).join('\n') : "None", inline: false }
-        )
-        .setFooter({ text: EMBED_BRANDING.footerText })
-        .setColor(EMBED_BRANDING.primaryColor);
-    
-    if (interaction && interaction.editReply && (interaction.deferred || interaction.replied)) {
-        return interaction.editReply({ embeds: [responseEmbed] });
-    }
-    return interaction && interaction.channel ? interaction.channel.send({ embeds: [responseEmbed] }) : null;
-}
-
-async function generateFinalTicket(interaction, channelPrefix, selectionLabel, categoryId) {
-    try {
-        const cleanUserSanitized = interaction.user.username.toLowerCase().replace(/[^a-z0-9_-]/g, '');
-        const ticketChannel = await interaction.guild.channels.create({
-            name: `${channelPrefix}-${cleanUserSanitized}`,
-            type: ChannelType.GuildText,
-            parent: categoryId,
-            permissionOverwrites: [
-                { id: interaction.guild.roles.everyone.id, deny: [PermissionsBitField.Flags.ViewChannel] },
-                { id: interaction.user.id, allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.SendMessages] }
-            ]
-        });
-
-        const closeTicketRow = new ActionRowBuilder().addComponents(
-            new ButtonBuilder()
-                .setCustomId('btn_close_ticket')
-                .setLabel('Close Ticket')
-                .setStyle(ButtonStyle.Danger)
-        );
-
-        const cleanTitleLabel = selectionLabel.replace(/-/g, ' ').toUpperCase();
-        const supportTicketEmbed = new EmbedBuilder()
-            .setTitle(`${cleanTitleLabel} Ticket`)
-            .setDescription(`Hello ${interaction.user},\n\nPlease describe your issue below.\n\nType \`cancel\` or click the button below to close this channel.`)
-            .setColor(EMBED_BRANDING.primaryColor);
-
-        await ticketChannel.send({ content: `${interaction.user}`, embeds: [supportTicketEmbed], components: [closeTicketRow] });
-
-        const standardNotifyEmbed = new EmbedBuilder().setDescription(`Ticket channel created: ${ticketChannel}`).setColor(EMBED_BRANDING.primaryColor);
-        if (interaction.deferred || interaction.replied) await interaction.editReply({ embeds: [standardNotifyEmbed] });
-        else await interaction.reply({ embeds: [standardNotifyEmbed], ephemeral: true });
-
-        const ticketLog = new EmbedBuilder()
-            .setTitle("Ticket Created")
-            .setDescription(`Ticket type **${selectionLabel}** opened by ${interaction.user} in ${ticketChannel}.`)
-            .setColor(EMBED_BRANDING.primaryColor)
-            .setTimestamp();
-        await sendLog(interaction.guild, 'tickets', ticketLog);
-
-    } catch (e) {
-        const errorMsg = { embeds: [new EmbedBuilder().setDescription("Failed creating ticket channel.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true };
-        if (interaction.deferred || interaction.replied) await interaction.editReply(errorMsg).catch(() => {});
-        else await interaction.reply(errorMsg).catch(() => {});
-    }
-}
+const configPath = './config.json';
+let CONFIG = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildModeration,
-        GatewayIntentBits.DirectMessages
+        GatewayIntentBits.MessageContent
     ]
 });
 
-client.once('ready', async () => {
-    console.log(`Bot running: ${client.user.tag}`);
-    try {
-        const restInstance = new REST({ version: '10' }).setToken(TOKEN);
-        await restInstance.put(Routes.applicationCommands(CLIENT_ID), { body: slashCommandsData });
-    } catch (e) {}
+// ==========================================
+// DATABASE SCHEMAS
+// ==========================================
+const guildConfigSchema = new mongoose.Schema({
+    guildId: { type: String, required: true, unique: true },
+    ticketCategoryId: { type: String, default: "" },
+    verifyCategoryId: { type: String, default: "" }
 });
+const GuildConfig = mongoose.model('GuildConfig', guildConfigSchema);
 
-client.on('messageCreate', async message => {
-    if (message.author.bot) return;
+const adminSchema = new mongoose.Schema({
+    guildId: { type: String, required: true },
+    targetId: { type: String, required: true, unique: true }, // User ID or Role ID
+    type: { type: String, enum: ['user', 'role'], required: true },
+    level: { type: Number, required: true, min: 1, max: 10 }
+});
+const Admin = mongoose.model('Admin', adminSchema);
 
-    if (!message.guild) {
-        if (bmtSessions.has(message.author.id)) {
-            const session = bmtSessions.get(message.author.id);
-            const currentQ = BMT_CONFIG.questions[session.step];
-            const answerClean = message.content.trim().toLowerCase();
+// Helper function to find a user's admin level
+async function getAdminLevel(member, guild) {
+    if (member.id === guild.ownerId) return 10; // Server Owner is always level 10
+    
+    // Check if the individual user is assigned an admin level
+    const userAdmin = await Admin.findOne({ guildId: guild.id, targetId: member.id, type: 'user' });
+    if (userAdmin) return userAdmin.level;
 
-            if (currentQ.a.includes(answerClean)) session.score++;
-            session.step++;
+    // Check if any of the user's roles are assigned an admin level
+    const roleIds = member.roles.cache.map(role => role.id);
+    const roleAdmins = await Admin.find({ guildId: guild.id, targetId: { $in: roleIds }, type: 'role' });
+    if (roleAdmins.length > 0) {
+        return Math.max(...roleAdmins.map(a => a.level));
+    }
 
-            if (session.step < BMT_CONFIG.questions.length) {
-                bmtSessions.set(message.author.id, session);
-                return message.reply({ embeds: [
-                    new EmbedBuilder()
-                        .setTitle(`Question ${session.step + 1} of ${BMT_CONFIG.questions.length}`)
-                        .setDescription(`**Question:** ${BMT_CONFIG.questions[session.step].q}`)
-                        .setColor(EMBED_BRANDING.primaryColor)
-                ]});
-            } else {
-                bmtSessions.delete(message.author.id);
-                const passed = session.score >= BMT_CONFIG.requiredCorrect;
-                
-                if (passed) {
-                    const targetGuild = client.guilds.cache.get(session.guildId);
-                    const targetMember = await targetGuild?.members.fetch(message.author.id).catch(() => null);
-                    const serverConfig = db[session.guildId];
-                    const robloxUserId = db.globalVerifiedUsers?.[message.author.id];
+    return 0; 
+}
 
-                    try {
-                        let groupRoleName = "Private";
-                        if (serverConfig && robloxUserId) {
-                            groupRoleName = await changeRobloxRank(session.guildId, robloxUserId, BMT_CONFIG.targetRankValue);
-                            if (targetMember) await executeUserUpdate(null, targetMember, serverConfig, robloxUserId);
-                        }
+function generateVerificationCode() {
+    const words = ["verification", "blue", "up", "right", "down", "yes", "robot", "army", "tiger", "alpha"];
+    let code = "";
+    for (let i = 0; i < 5; i++) {
+        code += words[Math.floor(Math.random() * words.length)] + " ";
+    }
+    return code.trim();
+}
 
-                        await message.reply({ embeds: [
-                            new EmbedBuilder()
-                                .setTitle("BMT Passed")
-                                .setDescription(`Score: ${session.score}/${BMT_CONFIG.questions.length}.\n\nYou have been promoted to ${groupRoleName} and roles are updated.`)
-                                .setColor(EMBED_BRANDING.primaryColor)
-                        ]});
+// ==========================================
+// COMMAND DECLARATIONS
+// ==========================================
+const commands = [
+    new SlashCommandBuilder()
+        .setName('ticket')
+        .setDescription('Ticket management commands')
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('config')
+                .setDescription('Set the category for support tickets')
+                .addChannelOption(option => 
+                    option.setName('category')
+                        .setDescription('The category channel')
+                        .addChannelTypes(ChannelType.GuildCategory)
+                        .setRequired(true)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('panel')
+                .setDescription('Send the ticket panels to the channel')),
+    new SlashCommandBuilder()
+        .setName('verify')
+        .setDescription('Verification management commands')
+        .addSubcommandGroup(group =>
+            group
+                .setName('ticket')
+                .setDescription('Configure verification settings')
+                .addSubcommand(subcommand =>
+                    subcommand
+                        .setName('config')
+                        .setDescription('Set the category for verification tickets')
+                        .addChannelOption(option => 
+                            option.setName('category')
+                                .setDescription('The category channel')
+                                .addChannelTypes(ChannelType.GuildCategory)
+                                .setRequired(true)))),
+    new SlashCommandBuilder()
+        .setName('send')
+        .setDescription('Send panels')
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('panel')
+                .setDescription('Send the main verification panel')),
+    new SlashCommandBuilder()
+        .setName('admin')
+        .setDescription('Manage bot admins and permission levels')
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('add')
+                .setDescription('Add an admin level to a user or role')
+                .addIntegerOption(option => option.setName('level').setDescription('Admin level (1-10)').setRequired(true).setMinValue(1).setMaxValue(10))
+                .addUserOption(option => option.setName('user').setDescription('Target user').setRequired(false))
+                .addRoleOption(option => option.setName('role').setDescription('Target role').setRequired(false)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('delete')
+                .setDescription('Remove a user or role from the admin list')
+                .addUserOption(option => option.setName('user').setDescription('Target user').setRequired(false))
+                .addRoleOption(option => option.setName('role').setDescription('Target role').setRequired(false)))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('view')
+                .setDescription('View the list of server admins'))
+].map(command => command.toJSON());
 
-                        if (targetGuild) {
-                            const bmtLog = new EmbedBuilder()
-                                .setTitle("BMT Pass")
-                                .setDescription(`${message.author} passed the BMT quiz (${session.score}/5) and was promoted to Private.`)
-                                .setColor(EMBED_BRANDING.primaryColor)
-                                .setTimestamp();
-                            await sendLog(targetGuild, 'moderation', bmtLog);
-                        }
-                    } catch (err) {
-                        await message.reply({ embeds: [
-                            new EmbedBuilder()
-                                .setTitle("Promotion Error")
-                                .setDescription(`Passed (${session.score}/5), but the Roblox promotion failed:\n\`${err.message}\`\n\nShow this to an officer for a manual update.`)
-                                .setColor(EMBED_BRANDING.errorColor)
-                        ]});
-                    }
-                } else {
-                    await message.reply({ embeds: [
-                        new EmbedBuilder()
-                            .setTitle("BMT Failed")
-                            .setDescription(`Score: ${session.score}/${BMT_CONFIG.questions.length}. You need ${BMT_CONFIG.requiredCorrect} correct answers to pass.`)
-                            .setColor(EMBED_BRANDING.errorColor)
-                    ]});
-
-                    const targetGuild = client.guilds.cache.get(session.guildId);
-                    if (targetGuild) {
-                        const bmtFailLog = new EmbedBuilder()
-                            .setTitle("BMT Fail")
-                            .setDescription(`${message.author} failed the BMT quiz (${session.score}/5).`)
-                            .setColor(EMBED_BRANDING.errorColor)
-                            .setTimestamp();
-                        await sendLog(targetGuild, 'moderation', bmtFailLog);
-                    }
-                }
-            }
-        }
+client.once('ready', async () => {
+    console.log(`Logged in as ${client.user.tag}`);
+    
+    if (!CONFIG.CLIENT_ID || !CONFIG.GUILD_ID || !CONFIG.MONGO_URI) {
+        console.error("CRITICAL ERROR: Missing configuration keys in config.json.");
         return;
     }
 
-    if (!db.licensedGuilds.includes(message.guild.id)) return;
+    mongoose.connect(CONFIG.MONGO_URI)
+        .then(() => console.log('Connected to MongoDB.'))
+        .catch(err => console.error('MongoDB connection error:', err));
 
-    const serverConfig = db[message.guild.id];
-    if (!serverConfig) return;
-    
-    const authorAdminLevel = getAdminLevel(message.guild, message.member);
+    const rest = new REST({ version: '10' }).setToken(CONFIG.TOKEN);
+    try {
+        await rest.put(
+            Routes.applicationGuildCommands(CONFIG.CLIENT_ID, CONFIG.GUILD_ID),
+            { body: commands },
+        );
+        console.log('Successfully registered global application slash commands.');
+    } catch (error) {
+        console.error(error);
+    }
+});
+
+// ==========================================
+// TEXT MESSAGE EVENTS (!bgcheck)
+// ==========================================
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
 
     if (message.content.toLowerCase().startsWith('!bgcheck')) {
-        const args = message.content.split(' ');
-        if (args.length < 2) {
-            return message.reply({ embeds: [new EmbedBuilder().setDescription("Usage: `!bgcheck [username]`").setColor(EMBED_BRANDING.errorColor)] });
+        const userLevel = await getAdminLevel(message.member, message.guild);
+        if (userLevel < 4) {
+            return message.reply("❌ You need to be at least **Admin Level 4** to run a background check.");
         }
 
-        const targetUsername = args[1];
-        const profileData = await getRobloxUser(targetUsername);
+        const loadingEmbed = new EmbedBuilder()
+            .setTitle("Background Checking")
+            .setDescription("Please hold on whilst we background check the user.")
+            .setColor(EMBED_CONFIG.loadingColor);
 
-        if (!profileData) {
-            return message.reply({ embeds: [new EmbedBuilder().setDescription("User not found.").setColor(EMBED_BRANDING.errorColor)] });
-        }
+        const initialMsg = await message.channel.send({ content: `Hello ${message.author},`, embeds: [loadingEmbed] });
 
-        const pastNames = await getRobloxUserHistory(profileData.id);
-        
-        let groupStatus = "Not configured";
-        if (serverConfig.groupId) {
-            const groupInfo = await getRobloxFullGroupInfo(profileData.id, serverConfig.groupId);
-            groupStatus = `${groupInfo.name} (Rank: ${groupInfo.rank})`;
-        }
+        setTimeout(async () => {
+            const page1 = new EmbedBuilder()
+                .setTitle(`${message.author.username} Background Check`)
+                .setDescription("**MEDAL**\nNone\n\n**LEVEL**\nNone\n\n**Community Member**\nNone\n\n**RANKS**\nNone\n\n**Alerts**\n* [This user is new to our discord server.]\n\nViewing Page 1 / 3")
+                .setColor(EMBED_CONFIG.neutralColor);
 
-        const formattedDate = new Date(profileData.created).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-
-        const bgCheckEmbed = new EmbedBuilder()
-            .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-            .setTitle(`${EMBED_BRANDING.bgCheckTitle}: ${profileData.username}`)
-            .addFields(
-                { name: "User ID", value: String(profileData.id), inline: true },
-                { name: "Created", value: formattedDate, inline: true },
-                { name: "Past Usernames", value: pastNames, inline: false },
-                { name: "Group Status", value: groupStatus, inline: false }
-            )
-            .setFooter({ text: EMBED_BRANDING.footerText })
-            .setColor(EMBED_BRANDING.primaryColor)
-            .setTimestamp();
-
-        return message.reply({ embeds: [bgCheckEmbed] });
-    }
-
-    if (message.content.toLowerCase().startsWith('!verify')) {
-        if (!serverConfig.ticketCategory) {
-            return message.reply({ embeds: [new EmbedBuilder().setDescription("Ticket category not set.").setColor(EMBED_BRANDING.errorColor)] });
-        }
-        const channels = await message.guild.channels.fetch().catch(() => null);
-        if (channels) {
-            const openCheck = channels.find(c => c && c.parentId === serverConfig.ticketCategory && c.type === ChannelType.GuildText && c.permissionOverwrites?.cache?.has(message.author.id));
-            if (openCheck) {
-                return message.reply({ embeds: [new EmbedBuilder().setDescription(`Verification ticket already open: ${openCheck}`).setColor(EMBED_BRANDING.errorColor)] });
-            }
-        }
-        
-        const simulatedInteraction = {
-            user: message.author,
-            member: message.member,
-            guild: message.guild,
-            channel: message.channel,
-            replied: false,
-            deferred: false,
-            reply: async (payload) => message.reply(payload),
-            editReply: async (payload) => message.reply(payload)
-        };
-        return await generateFinalTicket(simulatedInteraction, "verify", "verification", serverConfig.ticketCategory);
-    }
-
-    if (activeSessions.has(message.channel.id)) {
-        const session = activeSessions.get(message.channel.id);
-        if (session.userId !== message.author.id) return;
-
-        const input = message.content.trim();
-
-        if (input.toLowerCase() === 'cancel') {
-            await message.reply({ embeds: [new EmbedBuilder().setDescription("Closing channel...").setColor(EMBED_BRANDING.errorColor)] });
-            activeSessions.delete(message.channel.id);
-            setTimeout(() => message.channel.delete().catch(() => {}), 3000);
-            return;
-        }
-
-        if (session.step === 1) {
-            const robloxUser = await getRobloxUser(input);
-            if (!robloxUser) {
-                return message.reply({ embeds: [new EmbedBuilder().setDescription("User not found. Retry or type `cancel`.").setColor(EMBED_BRANDING.errorColor)] });
-            }
-            session.robloxId = robloxUser.id;
-            session.robloxUsername = robloxUser.username;
-            session.step = 2;
-            activeSessions.set(message.channel.id, session);
-
-            return message.reply({ embeds: [
-                new EmbedBuilder()
-                    .setTitle("Account Confirmation")
-                    .setDescription(`Is this your profile? Reply YES or NO.`)
-                    .addFields(
-                        { name: "Username", value: robloxUser.username, inline: true },
-                        { name: "ID", value: String(robloxUser.id), inline: true },
-                        { name: "Profile", value: `[Link](https://www.roblox.com/users/${robloxUser.id}/profile)`, inline: false }
-                    )
-                    .setColor(EMBED_BRANDING.primaryColor)
-            ]});
-        }
-
-        if (session.step === 2) {
-            if (input.toLowerCase() === 'no') {
-                session.step = 1;
-                activeSessions.set(message.channel.id, session);
-                return message.reply({ embeds: [new EmbedBuilder().setDescription("Type your correct username:").setColor(EMBED_BRANDING.primaryColor)] });
-            }
-            if (input.toLowerCase() !== 'yes') {
-                return message.reply({ embeds: [new EmbedBuilder().setDescription("Reply with YES or NO.").setColor(EMBED_BRANDING.errorColor)] });
-            }
-
-            const code = generateVerificationCode();
-            session.verificationCode = code;
-            session.step = 3;
-            activeSessions.set(message.channel.id, session);
-
-            return message.reply({ embeds: [
-                new EmbedBuilder()
-                    .setTitle("Ownership Verification")
-                    .setDescription(`Paste this code into your Roblox profile description, save it, and type 'DONE' here.`)
-                    .addFields({ name: "Code", value: `\`${code}\``, inline: false })
-                    .setColor(EMBED_BRANDING.primaryColor)
-            ]});
-        }
-
-        if (session.step === 3) {
-            if (input.toLowerCase() !== 'done') {
-                return message.reply({ embeds: [new EmbedBuilder().setDescription("Type `DONE` once saved.").setColor(EMBED_BRANDING.errorColor)] });
-            }
-
-            const liveUser = await getRobloxUserById(session.robloxId);
-            if (!liveUser || !liveUser.description.toLowerCase().includes(session.verificationCode.toLowerCase())) {
-                return message.reply({ 
-                    embeds: [new EmbedBuilder()
-                        .setTitle("Verification Failed")
-                        .setDescription(`Code not detected in your description.\n\nExpected:\n\`${session.verificationCode}\``)
-                        .setColor(EMBED_BRANDING.errorColor)]
-                });
-            }
-
-            const simulatedInteraction = { channel: message.channel };
-            activeSessions.delete(message.channel.id);
-            await executeUserUpdate(simulatedInteraction, message.member, serverConfig, session.robloxId);
-            
-            const logEmbed = new EmbedBuilder()
-                .setTitle("User Verified")
-                .setDescription(`${message.author} linked to **${session.robloxUsername}** (${session.robloxId}).`)
-                .setColor(EMBED_BRANDING.primaryColor)
-                .setTimestamp();
-            await sendLog(message.guild, 'verification', logEmbed);
-
-            setTimeout(() => message.channel.delete().catch(() => {}), 7000);
-            return;
-        }
-    }
-
-    if (authorAdminLevel < 1) {
-        const tagsOwner = message.mentions.users.has(message.guild.ownerId);
-        const tagsProtected = message.mentions.users.some(u => PROTECTED_USERS.includes(u.id));
-        if (tagsOwner || tagsProtected) {
-            try {
-                await message.delete().catch(() => {});
-                await message.member.timeout(24 * 60 * 60 * 1000, "Mentioned protected user.").catch(() => {});
-                
-                const modEmbed = new EmbedBuilder()
-                    .setTitle("Mute Executed")
-                    .setDescription(`${message.author} muted for 24 hours (Protected ping).`)
-                    .setColor(EMBED_BRANDING.errorColor)
-                    .setTimestamp();
-                await sendLog(message.guild, 'moderation', modEmbed);
-                return;
-            } catch (err) {}
-        }
+            await initialMsg.edit({ embeds: [page1] });
+        }, 3000);
     }
 });
 
-client.on('interactionCreate', async interaction => {
-    try {
-        const guild = interaction.guild;
-        const member = interaction.member;
-        if (!guild) return;
+// ==========================================
+// SLASH COMMANDS & INTERACTION HANDLERS
+// ==========================================
+client.on('interactionCreate', async (interaction) => {
+    if (interaction.isChatInputCommand()) {
+        const { commandName, options } = interaction;
+        const userAdminLevel = await getAdminLevel(interaction.member, interaction.guild);
 
-        // --- INTERCEPT LICENSE COMMAND FIRST ---
-        if (interaction.isChatInputCommand() && interaction.commandName === 'add-license') {
-            if (interaction.user.id !== OWNER_ID) {
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Owner command only.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+        // Standard permission check for setup/admin commands
+        if (['ticket', 'verify', 'send', 'admin'].includes(commandName)) {
+            if (userAdminLevel < 7 && commandName !== 'admin' && options.getSubcommand() !== 'view') {
+                return interaction.reply({ content: "❌ You don't have permission to edit bot settings (Minimum Level 7 required).", ephemeral: true });
             }
-            const targetServerId = interaction.options.getString('server-id');
-            if (!db.licensedGuilds.includes(targetServerId)) {
-                db.licensedGuilds.push(targetServerId);
-                saveDB();
+        }
+
+        // --- /admin add ---
+        if (commandName === 'admin' && options.getSubcommand() === 'add') {
+            const assignedLevel = options.getInteger('level');
+            const targetUser = options.getUser('user');
+            const targetRole = options.getRole('role');
+
+            if (userAdminLevel < 10) {
+                return interaction.reply({ content: "❌ Only the Server Owner (Admin Level 10) can manage admin permissions.", ephemeral: true });
             }
-            return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Licensed server: \`${targetServerId}\``).setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
+
+            if (!targetUser && !targetRole) {
+                return interaction.reply({ content: "❌ Please mention a user or select a role to make an admin.", ephemeral: true });
+            }
+
+            const targetId = targetUser ? targetUser.id : targetRole.id;
+            const targetType = targetUser ? 'user' : 'role';
+            const mention = targetUser ? `<@${targetUser.id}>` : `<@&${targetRole.id}>`;
+
+            await Admin.findOneAndUpdate(
+                { guildId: interaction.guild.id, targetId: targetId },
+                { type: targetType, level: assignedLevel },
+                { upsert: true, new: true }
+            );
+
+            return interaction.reply({ content: `✅ Successfully set ${mention} to **Admin Level ${assignedLevel}**!`, ephemeral: true });
         }
 
-        // --- BLOCK IF NOT LICENSED ---
-        if (!db.licensedGuilds.includes(guild.id)) {
-            return interaction.reply({ embeds: [new EmbedBuilder().setTitle("Unlicensed Instance").setDescription("This guild is not authorized to interface with this application.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+        // --- /admin delete ---
+        if (commandName === 'admin' && options.getSubcommand() === 'delete') {
+            const targetUser = options.getUser('user');
+            const targetRole = options.getRole('role');
+
+            if (userAdminLevel < 10) {
+                return interaction.reply({ content: "❌ Only the Server Owner (Admin Level 10) can manage admin permissions.", ephemeral: true });
+            }
+
+            if (!targetUser && !targetRole) {
+                return interaction.reply({ content: "❌ Please mention a user or select a role to remove from admins.", ephemeral: true });
+            }
+
+            const targetId = targetUser ? targetUser.id : targetRole.id;
+            const mention = targetUser ? `<@${targetUser.id}>` : `<@&${targetRole.id}>`;
+
+            const deletedRecord = await Admin.findOneAndDelete({ guildId: interaction.guild.id, targetId: targetId });
+
+            if (!deletedRecord) {
+                return interaction.reply({ content: `❌ ${mention} is not in the admin list.`, ephemeral: true });
+            }
+
+            return interaction.reply({ content: `✅ Successfully removed ${mention} from the admin list.`, ephemeral: true });
         }
 
-        if (!db[guild.id]) {
-            db[guild.id] = { groupId: null, binds: [], adminUsers: {}, adminRoles: {}, ticketCategory: null, ticketCount: 0, robloxCookie: null, logChannels: {}, activityChecks: {} };
-            saveDB();
-        }
-        const serverConfig = db[guild.id];
-        if (!serverConfig.activityChecks) serverConfig.activityChecks = {};
-        
-        const callerAdminLevel = getAdminLevel(guild, member);
-
-        if (interaction.isChatInputCommand()) {
+        // --- /admin view ---
+        if (commandName === 'admin' && options.getSubcommand() === 'view') {
+            await interaction.deferReply();
             
-            if (interaction.commandName === 'activitycheck') {
-                if (callerAdminLevel < 2) {
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                }
+            const allAdmins = await Admin.find({ guildId: interaction.guild.id }).sort({ level: -1 });
+            
+            const viewEmbed = new EmbedBuilder()
+                .setTitle(`[ABA] Admins List`)
+                .setDescription(`Viewing all server admins for **${interaction.guild.name}**`)
+                .setColor(EMBED_CONFIG.neutralColor)
+                .setFooter({ text: EMBED_CONFIG.footerText });
 
-                await interaction.reply({ content: `Activity check posted in ${interaction.channel}` });
-
-                const activityEmbed = new EmbedBuilder()
-                    .setTitle("Activity Check! – Activity Check")
-                    .setDescription("An activity check is being hosted right now. Use the ✅ Mark Activity button below to mark your activity.")
-                    .addFields({ name: "Hosted By", value: `${interaction.user}`, inline: false })
-                    .setFooter({ text: "DXHiro © 2026. All Rights Reserved." })
-                    .setTimestamp()
-                    .setColor('#111111');
-
-                const trackingRow = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('btn_mark_activity')
-                        .setLabel('✅ 0')
-                        .setStyle(ButtonStyle.Secondary)
-                );
-
-                const postedMessage = await interaction.channel.send({ 
-                    content: "@everyone", 
-                    embeds: [activityEmbed], 
-                    components: [trackingRow] 
-                });
-
-                serverConfig.activityChecks[postedMessage.id] = [];
-                saveDB();
-                return;
+            // Initialize fields for levels 1-10
+            let adminGroups = {};
+            for (let i = 10; i >= 1; i--) {
+                adminGroups[i] = [];
             }
 
-            if (interaction.commandName === 'set-cookie') {
-                if (callerAdminLevel < 8) {
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Server owner command only.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
+            // Lock Server Owner to Level 10 naturally
+            adminGroups[10].push(`<@${interaction.guild.ownerId}> *(Server Owner)*`);
+
+            allAdmins.forEach(adm => {
+                const mentionText = adm.type === 'user' ? `<@${adm.targetId}>` : `<@&${adm.targetId}>`;
+                if (adm.targetId !== interaction.guild.ownerId) {
+                    adminGroups[adm.level].push(mentionText);
                 }
-                serverConfig.robloxCookie = interaction.options.getString('cookie');
-                saveDB();
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Cookie updated.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
-            }
+            });
 
-            if (interaction.commandName === 'configure-group') {
-                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                serverConfig.groupId = interaction.options.getInteger('group-id');
-                saveDB();
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Group ID updated: **${serverConfig.groupId}**`).setColor(EMBED_BRANDING.primaryColor)] });
-            }
-
-            if (interaction.commandName === 'set-log-channel') {
-                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                const logType = interaction.options.getString('type');
-                const targetChan = interaction.options.getChannel('channel');
-                if (!serverConfig.logChannels) serverConfig.logChannels = {};
-                serverConfig.logChannels[logType] = targetChan.id;
-                saveDB();
-                return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Logs for **${logType}** redirected to ${targetChan}`).setColor(EMBED_BRANDING.primaryColor)] });
-            }
-
-            if (interaction.commandName === 'bind') {
-                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                
-                const subcommand = interaction.options.getSubcommand();
-                if (!serverConfig.binds || !Array.isArray(serverConfig.binds)) serverConfig.binds = [];
-
-                if (subcommand === 'add' || subcommand === 'range') {
-                    const rolesInput = interaction.options.getString('roles');
-                    const prefix = interaction.options.getString('prefix') || null;
-
-                    const extractedIds = [...rolesInput.matchAll(/\d+/g)].map(match => match[0]);
-                    const validRoleIds = extractedIds.filter(id => interaction.guild.roles.cache.has(id));
-
-                    if (validRoleIds.length === 0) {
-                        return interaction.reply({ embeds: [new EmbedBuilder().setDescription("No valid roles provided.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                    }
-
-                    if (subcommand === 'add') {
-                        const compare = interaction.options.getString('comparison') || '==';
-                        const rank = interaction.options.getInteger('rank-value');
-
-                        serverConfig.binds.push({ roleIds: validRoleIds, compare: compare, rank: rank, prefix: prefix });
-                        saveDB();
-
-                        const rolesString = validRoleIds.map(id => `<@&${id}>`).join(', ');
-                        return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Bound rank **${compare} ${rank}** to: ${rolesString}`).setColor(EMBED_BRANDING.primaryColor)] });
-                    }
-
-                    if (subcommand === 'range') {
-                        const minRank = interaction.options.getInteger('min-rank');
-                        const maxRank = interaction.options.getInteger('max-rank');
-
-                        serverConfig.binds.push({ roleIds: validRoleIds, compare: 'range', minRank: minRank, maxRank: maxRank, prefix: prefix });
-                        saveDB();
-
-                        const rolesString = validRoleIds.map(id => `<@&${id}>`).join(', ');
-                        return interaction.reply({ embeds: [new EmbedBuilder().setDescription(`Bound range **${minRank}-${maxRank}** to: ${rolesString}`).setColor(EMBED_BRANDING.primaryColor)] });
-                    }
-                }
-
-                if (subcommand === 'clear') {
-                    serverConfig.binds = [];
-                    saveDB();
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Cleared all active binds.").setColor(EMBED_BRANDING.primaryColor)] });
-                }
-
-                if (subcommand === 'list') {
-                    if (!serverConfig.binds || serverConfig.binds.length === 0) {
-                        return interaction.reply({ embeds: [new EmbedBuilder().setDescription("No active binds.").setColor(EMBED_BRANDING.errorColor)] });
-                    }
-
-                    const listEmbed = new EmbedBuilder()
-                        .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                        .setTitle("Active Bind configurations")
-                        .setColor(EMBED_BRANDING.primaryColor);
-
-                    let descriptions = serverConfig.binds.map((b, i) => {
-                        const rolesStr = b.roleIds ? b.roleIds.map(id => `<@&${id}>`).join(', ') : `<@&${b.roleId}>`;
-                        if (b.compare === 'range') return `**${i + 1}.** Rank \`[${b.minRank}-${b.maxRank}]\` ➔ ${rolesStr}`;
-                        return `**${i + 1}.** Rank \`${b.compare} ${b.rank}\` ➔ ${rolesStr}`;
+            // Build dynamic fields matching the aesthetic from image_3275fc.jpg
+            for (let i = 10; i >= 1; i--) {
+                if (adminGroups[i].length > 0) {
+                    const list = adminGroups[i].join('\n• ');
+                    viewEmbed.addFields({
+                        name: `⚙️ Admin Level ${i}`,
+                        value: `**Permissions:** ${LEVEL_PERMISSIONS[i]}\n• ${list}`,
+                        inline: false
                     });
-
-                    listEmbed.setDescription(descriptions.join('\n'));
-                    return interaction.reply({ embeds: [listEmbed] });
                 }
             }
 
-            if (interaction.commandName === 'promote' || interaction.commandName === 'demote' || interaction.commandName === 'setrank') {
-                if (callerAdminLevel < 2) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                await interaction.deferReply();
-                
-                const targetUserString = interaction.options.getString('username');
-                const targetProfile = await getRobloxUser(targetUserString);
-                if (!targetProfile) return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("User not found.").setColor(EMBED_BRANDING.errorColor)] });
-
-                const currentRank = await getRobloxUserRank(targetProfile.id, serverConfig.groupId);
-                let finalRankTarget = currentRank;
-
-                if (interaction.commandName === 'promote') finalRankTarget = currentRank + 1;
-                else if (interaction.commandName === 'demote') finalRankTarget = currentRank - 1;
-                else finalRankTarget = interaction.options.getInteger('rank-value');
-
-                if (finalRankTarget < 1 || finalRankTarget > 255) {
-                    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Value range is 1-255.").setColor(EMBED_BRANDING.errorColor)] });
-                }
-
-                try {
-                    const assignedRoleName = await changeRobloxRank(guild.id, targetProfile.id, finalRankTarget);
-                    
-                    const rankLog = new EmbedBuilder()
-                        .setTitle(`Admin Rank Modification`)
-                        .setDescription(`Target: **${targetProfile.username}** updated by ${interaction.user}.`)
-                        .addFields(
-                            { name: "Old", value: String(currentRank), inline: true },
-                            { name: "New", value: `${finalRankTarget} (${assignedRoleName})`, inline: true }
-                        )
-                        .setColor(EMBED_BRANDING.primaryColor);
-                    await sendLog(guild, 'moderation', rankLog);
-
-                    const matchedDiscordUser = Object.keys(db.globalVerifiedUsers || {}).find(key => db.globalVerifiedUsers[key] === targetProfile.id);
-                    if (matchedDiscordUser) {
-                        const foundMember = await guild.members.fetch(matchedDiscordUser).catch(() => null);
-                        if (foundMember) await executeUserUpdate(interaction, foundMember, serverConfig, targetProfile.id);
-                    }
-
-                    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Updated **${targetProfile.username}** to rank: **${assignedRoleName}**`).setColor(EMBED_BRANDING.primaryColor)] });
-                } catch (err) {
-                    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`Error: ${err.message}`).setColor(EMBED_BRANDING.errorColor)] });
-                }
-            }
-
-            if (interaction.commandName === 'send-panel') {
-                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                
-                const reportEmbed = new EmbedBuilder()
-                    .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                    .setTitle("REPORT TICKETS")
-                    .setDescription("Press the 🚨 **Create Ticket** button for tickets to report an incident or other users.")
-                    .setColor(EMBED_BRANDING.primaryColor);
-
-                const reportRow = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('btn_open_report_menu').setLabel('Create Ticket').setStyle(ButtonStyle.Danger)
-                );
-
-                const otherEmbed = new EmbedBuilder()
-                    .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                    .setTitle("OTHER TICKETS")
-                    .setDescription("Press the 🚨 **Create Ticket** button for tickets regarding other matters.")
-                    .setColor(EMBED_BRANDING.primaryColor);
-
-                const otherRow = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('btn_open_other_menu').setLabel('Create Ticket').setStyle(ButtonStyle.Danger)
-                );
-                
-                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Ticket portal panels posted successfully.").setColor('#2ECC71')], ephemeral: true });
-                await interaction.channel.send({ embeds: [reportEmbed], components: [reportRow] });
-                return interaction.channel.send({ embeds: [otherEmbed], components: [otherRow] });
-            }
-
-            if (interaction.commandName === 'ticket') {
-                const subcommand = interaction.options.getSubcommand();
-                if (subcommand === 'configure') {
-                    if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                    serverConfig.ticketCategory = interaction.options.getChannel('category').id;
-                    saveDB();
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Category channel updated.").setColor(EMBED_BRANDING.primaryColor)] });
-                }
-            }
-
-            if (interaction.commandName === 'bmt') {
-                if (callerAdminLevel < 4) return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Access denied.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                
-                const bmtPanelEmbed = new EmbedBuilder()
-                    .setAuthor({ name: EMBED_BRANDING.authorName, iconURL: EMBED_BRANDING.authorIcon })
-                    .setTitle(EMBED_BRANDING.bmtPanelTitle)
-                    .setDescription("Click below to start your direct DM training quiz assessment. (Requires 4/5 score to pass).")
-                    .setFooter({ text: EMBED_BRANDING.footerText })
-                    .setColor(EMBED_BRANDING.primaryColor);
-
-                const bmtActionRow = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('btn_start_bmt').setLabel('Start Evaluation').setStyle(ButtonStyle.Primary)
-                );
-
-                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("BMT terminal posted.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
-                return interaction.channel.send({ embeds: [bmtPanelEmbed], components: [bmtActionRow] });
-            }
-
-            if (interaction.commandName === 'update') {
-                await interaction.deferReply({ ephemeral: true });
-                return executeUserUpdate(interaction, member, serverConfig);
-            }
+            return interaction.editReply({ embeds: [viewEmbed] });
         }
 
-        else if (interaction.isButton()) {
+        // --- /ticket config ---
+        if (commandName === 'ticket' && options.getSubcommand() === 'config') {
+            const category = options.getChannel('category');
+            await GuildConfig.findOneAndUpdate(
+                { guildId: interaction.guild.id },
+                { ticketCategoryId: category.id },
+                { upsert: true, new: true }
+            );
+            return interaction.reply({ content: `✅ Ticket category has been set to: **${category.name}**`, ephemeral: true });
+        }
+
+        // --- /verify ticket config ---
+        if (commandName === 'verify' && options.getSubcommand() === 'config') {
+            const category = options.getChannel('category');
+            await GuildConfig.findOneAndUpdate(
+                { guildId: interaction.guild.id },
+                { verifyCategoryId: category.id },
+                { upsert: true, new: true }
+            );
+            return interaction.reply({ content: `✅ Verification category has been set to: **${category.name}**`, ephemeral: true });
+        }
+
+        // --- /ticket panel ---
+        if (commandName === 'ticket' && options.getSubcommand() === 'panel') {
+            const reportEmbed = new EmbedBuilder()
+                .setTitle(EMBED_CONFIG.reportPanelTitle)
+                .setDescription(EMBED_CONFIG.reportPanelDescription)
+                .setColor(EMBED_CONFIG.errorColor);
+
+            const otherEmbed = new EmbedBuilder()
+                .setTitle(EMBED_CONFIG.otherPanelTitle)
+                .setDescription(EMBED_CONFIG.otherPanelDescription)
+                .setColor(EMBED_CONFIG.errorColor);
+
+            const reportRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('open_report_menu')
+                    .setLabel('Create Ticket')
+                    .setStyle(ButtonStyle.Danger)
+            );
+
+            const otherRow = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('open_other_menu')
+                    .setLabel('Create Ticket')
+                    .setStyle(ButtonStyle.Danger)
+            );
+
+            await interaction.channel.send({ embeds: [reportEmbed], components: [reportRow] });
+            await interaction.channel.send({ embeds: [otherEmbed], components: [otherRow] });
+            return interaction.reply({ content: "Ticket panels deployed successfully.", ephemeral: true });
+        }
+
+        // --- /send panel ---
+        if (commandName === 'send' && options.getSubcommand() === 'panel') {
+            const verifyEmbed = new EmbedBuilder()
+                .setTitle(EMBED_CONFIG.verificationTitle)
+                .setDescription(EMBED_CONFIG.verificationDescription)
+                .setFooter({ text: EMBED_CONFIG.footerText })
+                .setColor(EMBED_CONFIG.primaryColor);
+
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                    .setCustomId('verify_oauth')
+                    .setLabel('Verify via ROBLOX Login')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId('verify_game')
+                    .setLabel('Verify via ROBLOX Game')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId('update_roles')
+                    .setLabel('Update Roles')
+                    .setStyle(ButtonStyle.Success),
+                new ButtonBuilder()
+                    .setCustomId('verify_tickets')
+                    .setLabel('Verify via TICKETS')
+                    .setStyle(ButtonStyle.Primary)
+            );
+
+            await interaction.channel.send({ embeds: [verifyEmbed], components: [row] });
+            return interaction.reply({ content: "Verification panel deployed successfully.", ephemeral: true });
+        }
+    }
+
+    // ==========================================
+    // BUTTON CLICK INTERACTION HANDLING
+    // ==========================================
+    if (interaction.isButton()) {
+        if (interaction.customId === 'open_report_menu') {
+            const selectMenu = new StringSelectMenuBuilder()
+                .setCustomId('ticket_select_report')
+                .setPlaceholder('Select Ticket Type')
+                .addOptions([
+                    { label: 'Report High Rank', description: 'Report a high ranking officer.', value: 'report_high_rank' },
+                    { label: 'Report Exploiter', description: 'Report an exploiter to our moderation team.', value: 'report_exploiter' },
+                    { label: 'Report Corruption', description: 'Report a corrupted user.', value: 'report_corruption' },
+                    { label: 'Report Abuser', description: 'Report an abuser.', value: 'report_abuser' },
+                    { label: 'Report Rule Breaker', description: 'Report a server rule breaker.', value: 'report_rule_breaker' }
+                ]);
+            const row = new ActionRowBuilder().addComponents(selectMenu);
+            return interaction.reply({ content: 'Please select the type of ticket you wish to create.', components: [row], ephemeral: true });
+        }
+
+        if (interaction.customId === 'open_other_menu') {
+            const selectMenu = new StringSelectMenuBuilder()
+                .setCustomId('ticket_select_other')
+                .setPlaceholder('Select Ticket Type')
+                .addOptions([
+                    { label: 'Report Bug / Glitch', description: 'Report a game or discord bug to developers.', value: 'report_bug' },
+                    { label: 'Report Exploit Script', description: 'Report an exploit script or system vulnerability.', value: 'report_exploit_script' },
+                    { label: 'Developer Application', description: 'Apply to become a developer.', value: 'developer_application' },
+                    { label: 'Alliance Application', description: 'Apply to become an ally with us.', value: 'alliance_application' }
+                ]);
+            const row = new ActionRowBuilder().addComponents(selectMenu);
+            return interaction.reply({ content: 'Please select the type of ticket you wish to create.', components: [row], ephemeral: true });
+        }
+
+        if (interaction.customId === 'verify_tickets') {
+            const dbConfig = await GuildConfig.findOne({ guildId: interaction.guild.id });
+            if (!dbConfig || !dbConfig.verifyCategoryId) {
+                return interaction.reply({ content: "❌ Verification category has not been configured by an administrator yet.", ephemeral: true });
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+
+            const channelName = `verify-${interaction.user.username}`;
+            const privateChannel = await interaction.guild.channels.create({
+                name: channelName,
+                type: ChannelType.GuildText,
+                parent: dbConfig.verifyCategoryId,
+                permissionOverwrites: [
+                    {
+                        id: interaction.guild.id,
+                        deny: [PermissionFlagsBits.ViewChannel],
+                    },
+                    {
+                        id: interaction.user.id,
+                        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+                    },
+                ],
+            });
+
+            const initEmbed = new EmbedBuilder()
+                .setTitle("Roblox Verification")
+                .setDescription(`Hello ${interaction.user},\n\nPlease type your Roblox Username below to start verification.\n\nType cancel at any time to close this channel.\n\nVerification System | Step 1 of 3`)
+                .setColor(EMBED_CONFIG.primaryColor);
+
+            await privateChannel.send({ content: `Hello ${interaction.user},`, embeds: [initEmbed] });
+            await interaction.editReply({ content: `Verification channel created: ${privateChannel}` });
+
+            const filter = (m) => m.author.id === interaction.user.id;
+            const collector = privateChannel.createMessageCollector({ filter, time: 300000 });
+
+            let step = 1;
+            let robloxUsername = "";
+            let robloxId = "";
+            let verificationCode = generateVerificationCode();
+
+            collector.on('collect', async (m) => {
+                if (m.content.toLowerCase() === 'cancel') {
+                    await privateChannel.send({ content: "Verification canceled. Deleting channel..." });
+                    setTimeout(() => privateChannel.delete().catch(() => {}), 5000);
+                    collector.stop();
+                    return;
+                }
+
+                if (step === 1) {
+                    robloxUsername = m.content;
+                    try {
+                        const response = await axios.post('https://users.roblox.com/v1/usernames/users', {
+                            usernames: [robloxUsername],
+                            excludeBannedUsers: false
+                        });
+
+                        if (!response.data.data || response.data.data.length === 0) {
+                            await privateChannel.send({ content: "Username not found. Please type a valid Roblox username." });
+                            return;
+                        }
+
+                        robloxId = response.data.data[0].id;
+                        robloxUsername = response.data.data[0].name;
+
+                        const confirmEmbed = new EmbedBuilder()
+                            .setTitle("Is this your account?")
+                            .setDescription(`Please confirm if this is your account.\nReply with YES or NO.\n\n**Username**\n${robloxUsername}\n\n**User ID**\n${robloxId}\n\n**Profile Link**\n[View Profile](https://www.roblox.com/users/${robloxId}/profile)\n\nVerification System | Step 2 of 3`)
+                            .setColor(EMBED_CONFIG.primaryColor);
+
+                        await privateChannel.send({ embeds: [confirmEmbed] });
+                        step = 2;
+                    } catch (error) {
+                        await privateChannel.send({ content: "An error occurred while connecting to Roblox. Please try again." });
+                    }
+                } 
+                else if (step === 2) {
+                    if (m.content.toLowerCase() === 'yes') {
+                        const codeEmbed = new EmbedBuilder()
+                            .setTitle("Profile Verification")
+                            .setDescription(`To verify ownership, please copy the code below and paste it into your Roblox profile **About** or **Description** section.\n\n**Code to Copy:**\n\`\`\`${verificationCode}\`\`\`\n\nOnce you have saved your profile, type **DONE** here.`)
+                            .setColor(EMBED_CONFIG.primaryColor);
+
+                        await privateChannel.send({ embeds: [codeEmbed] });
+                        step = 3;
+                    } else if (m.content.toLowerCase() === 'no') {
+                        await privateChannel.send({ content: "Restarting. Please enter your correct Roblox username." });
+                        step = 1;
+                    } else {
+                        await privateChannel.send({ content: "Invalid response. Please reply with YES or NO." });
+                    }
+                } 
+                else if (step === 3) {
+                    if (m.content.toLowerCase() === 'done') {
+                        try {
+                            const profileResponse = await axios.get(`https://users.roblox.com/v1/users/${robloxId}`);
+                            const description = profileResponse.data.description || "";
+
+                            if (description.includes(verificationCode)) {
+                                const successEmbed = new EmbedBuilder()
+                                    .setTitle("Verification Successful")
+                                    .setDescription(`You have been verified as ${robloxUsername}.\n\nPrefix: [OR-1]\nNickname: [OR-1] ${robloxUsername}\n\nSuccess! Deleting this channel in 5 seconds...`)
+                                    .setColor("#00ff00");
+
+                                await privateChannel.send({ embeds: [successEmbed] });
+
+                                const member = await interaction.guild.members.fetch(interaction.user.id);
+                                const role = interaction.guild.roles.cache.get(CONFIG.VERIFIED_ROLE_ID);
+                                if (role) await member.roles.add(role).catch(() => {});
+                                await member.setNickname(`[OR-1] ${robloxUsername}`).catch(() => {});
+
+                                setTimeout(() => privateChannel.delete().catch(() => {}), 5000);
+                                collector.stop();
+                            } else {
+                                await privateChannel.send({ content: "❌ Code not found in your Roblox description. Make sure you saved it correctly and type **DONE** again." });
+                            }
+                        } catch (error) {
+                            await privateChannel.send({ content: "Error verifying profile data. Please type **DONE** again." });
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    // ==========================================
+    // DROP-DOWN SELECT MENU HANDLING
+    // ==========================================
+    if (interaction.isStringSelectMenu()) {
+        if (interaction.customId === 'ticket_select_report' || interaction.customId === 'ticket_select_other') {
+            const dbConfig = await GuildConfig.findOne({ guildId: interaction.guild.id });
+            if (!dbConfig || !dbConfig.ticketCategoryId) {
+                return interaction.reply({ content: "❌ Support ticket category has not been configured by an administrator yet.", ephemeral: true });
+            }
+
+            const selectedValue = interaction.values[0];
+            const channelName = `ticket-${interaction.user.username}`;
             
-            if (interaction.customId === 'btn_mark_activity') {
-                const msgId = interaction.message.id;
-                
-                if (!serverConfig.activityChecks[msgId]) {
-                    serverConfig.activityChecks[msgId] = [];
-                }
+            const ticketChannel = await interaction.guild.channels.create({
+                name: channelName,
+                type: ChannelType.GuildText,
+                parent: dbConfig.ticketCategoryId,
+                permissionOverwrites: [
+                    {
+                        id: interaction.guild.id,
+                        deny: [PermissionFlagsBits.ViewChannel],
+                    },
+                    {
+                        id: interaction.user.id,
+                        allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages],
+                    },
+                ],
+            });
 
-                const participants = serverConfig.activityChecks[msgId];
-                
-                if (participants.includes(interaction.user.id)) {
-                    return interaction.reply({ content: "You have already logged your activity confirmation for this check assignment!", ephemeral: true });
-                }
+            const cleanName = selectedValue.replace(/_/g, ' ').toUpperCase();
+            const ticketEmbed = new EmbedBuilder()
+                .setTitle("Ticket Created")
+                .setDescription(`Hello ${interaction.user},\n\nThank you for reaching out. Support staff will be with you shortly regarding: **${cleanName}**`)
+                .setColor(EMBED_CONFIG.errorColor);
 
-                participants.push(interaction.user.id);
-                saveDB();
-
-                const updatedRow = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder()
-                        .setCustomId('btn_mark_activity')
-                        .setLabel(`✅ ${participants.length}`)
-                        .setStyle(ButtonStyle.Secondary)
-                );
-
-                await interaction.message.edit({ components: [updatedRow] });
-                return interaction.reply({ content: "Your activity status has been saved successfully! ✅", ephemeral: true });
-            }
-
-            if (interaction.customId === 'btn_close_ticket') {
-                await interaction.reply({ embeds: [new EmbedBuilder().setDescription("Deconstruction in process... Room closing.").setColor(EMBED_BRANDING.errorColor)] });
-                if (activeSessions.has(interaction.channel.id)) activeSessions.delete(interaction.channel.id);
-                
-                const closeLog = new EmbedBuilder()
-                    .setDescription(`Ticket channel ${interaction.channel.name} closed by ${interaction.user}.`)
-                    .setColor(EMBED_BRANDING.errorColor);
-                await sendLog(guild, 'tickets', closeLog);
-                
-                setTimeout(() => interaction.channel.delete().catch(() => {}), 3000);
-                return;
-            }
-
-            if (interaction.customId === 'btn_start_bmt') {
-                if (!db.globalVerifiedUsers || !db.globalVerifiedUsers[interaction.user.id]) {
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Verify your Roblox profile link first.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                }
-
-                try {
-                    bmtSessions.set(interaction.user.id, { step: 0, score: 0, guildId: guild.id });
-                    await interaction.user.send({ embeds: [
-                        new EmbedBuilder()
-                            .setTitle("BMT Examination")
-                            .setDescription(`**Question 1:** ${BMT_CONFIG.questions[0].q}`)
-                            .setColor(EMBED_BRANDING.primaryColor)
-                    ]});
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Quiz check sent to DMs.").setColor(EMBED_BRANDING.primaryColor)], ephemeral: true });
-                } catch (err) {
-                    bmtSessions.delete(interaction.user.id);
-                    return interaction.reply({ embeds: [new EmbedBuilder().setDescription("Unable to send DM. Check privacy metrics.").setColor(EMBED_BRANDING.errorColor)], ephemeral: true });
-                }
-            }
-
-            const cooldownKey = `${interaction.user.id}_ticket_cooldown`;
-            if (interaction.customId === 'btn_open_report_menu' || interaction.customId === 'btn_open_other_menu') {
-                if (cooldowns.has(cooldownKey) && cooldowns.get(cooldownKey) > Date.now()) {
-                    const cdEmbed = new EmbedBuilder()
-                        .setAuthor({ name: interaction.user.username, iconURL: interaction.user.displayAvatarURL() })
-                        .setTitle("Warning - Cooldown")
-                        .setDescription("You're currently on a **10s cooldown** for the **Create Ticket** button!")
-                        .setColor(EMBED_BRANDING.errorColor);
-                    return interaction.reply({ embeds: [cdEmbed], ephemeral: true });
-                }
-                cooldowns.set(cooldownKey, Date.now() + 10000);
-            }
-
-            if (interaction.customId === 'btn_open_report_menu') {
-                const reportMenu = new StringSelectMenuBuilder()
-                    .setCustomId('menu_select_ticket_action')
-                    .setPlaceholder('Select Ticket Type')
-                    .addOptions(
-                        new StringSelectMenuOptionBuilder().setLabel('Report High Rank').setValue('report_high_rank').setDescription('Report a high ranking officer.'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Exploiter').setValue('report_exploiter').setDescription('Report an exploiter in game to our moderation team'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Corruption').setValue('report_corruption').setDescription('Report a corrupted user'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Abuser').setValue('report_abuser').setDescription('Report an abuser'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Rule Breaker').setValue('report_rule_breaker').setDescription('Report a rule breaker')
-                    );
-
-                const actionRow = new ActionRowBuilder().addComponents(reportMenu);
-                return interaction.reply({ content: '**Create Ticket**\nPlease select what ticket you wish to create.', components: [actionRow], ephemeral: true });
-            }
-
-            if (interaction.customId === 'btn_open_other_menu') {
-                const otherMenu = new StringSelectMenuBuilder()
-                    .setCustomId('menu_select_ticket_action')
-                    .setPlaceholder('Select Ticket Type')
-                    .addOptions(
-                        new StringSelectMenuOptionBuilder().setLabel('Report Bug / Glitch').setValue('other_bug_glitch').setDescription('Report an in game / discord glitch or bug to our developers'),
-                        new StringSelectMenuOptionBuilder().setLabel('Report Exploit Script').setValue('other_exploit_script').setDescription('Report an exploit script or vulnerability to our developers'),
-                        new StringSelectMenuOptionBuilder().setLabel('Developer Application').setValue('other_developer_app').setDescription('Apply to become a developer for British Army'),
-                        new StringSelectMenuOptionBuilder().setLabel('Alliance Application').setValue('other_alliance_app').setDescription('Apply to become an ally with the British Army')
-                    );
-
-                const actionRow = new ActionRowBuilder().addComponents(otherMenu);
-                return interaction.reply({ content: '**Create Ticket**\nPlease select what ticket you wish to create.', components: [actionRow], ephemeral: true });
-            }
+            await ticketChannel.send({ content: `${interaction.user}`, embeds: [ticketEmbed] });
+            await interaction.reply({ content: `✅ Ticket channel created successfully: ${ticketChannel}`, ephemeral: true });
         }
-
-        else if (interaction.isStringSelectMenu()) {
-            if (interaction.customId === 'menu_select_ticket_action') {
-                await interaction.deferReply({ ephemeral: true });
-                const selection = interaction.values[0];
-                
-                if (!serverConfig.ticketCategory) {
-                    return interaction.editReply({ embeds: [new EmbedBuilder().setDescription("Ticket system category channel is missing setup configurations.").setColor(EMBED_BRANDING.errorColor)] });
-                }
-
-                const channels = await interaction.guild.channels.fetch().catch(() => null);
-                if (channels) {
-                    const openCheck = channels.find(c => c && c.parentId === serverConfig.ticketCategory && c.type === ChannelType.GuildText && c.permissionOverwrites?.cache?.has(interaction.user.id));
-                    if (openCheck) {
-                        return interaction.editReply({ embeds: [new EmbedBuilder().setDescription(`You already have an open ticket layout active here: ${openCheck}`).setColor(EMBED_BRANDING.errorColor)] });
-                    }
-                }
-
-                let prefix = selection.startsWith('report_') ? "report" : "other";
-                let labelCleaned = selection.replace('report_', '').replace('other_', '').replace(/_/g, '-');
-                
-                return await generateFinalTicket(interaction, prefix, labelCleaned, serverConfig.ticketCategory);
-            }
-        }
-    } catch (err) {
-        console.error("Interaction Routing Error Caught Safely:", err);
     }
 });
 
-// 💾 CONNECT TO CLOUD DATABASE FIRST, THEN START BOT INTERFACES
-mongoose.connect(MONGO_URI)
-    .then(async () => {
-        console.log("[MONGODB] Connected safely to your remote MongoDB Atlas Cluster.");
-        
-        let record = await DataModel.findOne({ key: 'global_state' });
-        if (!record) {
-            record = new DataModel({ key: 'global_state', data: { licensedGuilds: [] } });
-            await record.save();
-        }
-        
-        db = record.data;
-        if (!db.licensedGuilds) db.licensedGuilds = [];
-        
-        // Login to Discord only after structural cloud state has fully synchronized
-        client.login(TOKEN);
-    })
-    .catch(err => {
-        console.error("[CRITICAL] MongoDB Cloud Connection Denied:", err);
-        process.exit(1);
-    });
+client.login(CONFIG.TOKEN);
